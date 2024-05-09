@@ -1,22 +1,22 @@
+mod jwt;
+mod db;
+mod util;
+
+use jwt::{encode_jwt, get_and_decode_auth_token, get_user_from_token};
+use db::{db_delete_user, db_get_user_by_id, db_get_user_by_username};
+use util::{hash_password, generate_salt};
+
 use std::collections::HashMap;
 use axum::{
     Router,
     routing::{post, delete, get},
     extract::{State, Path, Query},
     Json,
-    http::{StatusCode, header::{HeaderMap, AUTHORIZATION}}
+    http::{StatusCode, header::HeaderMap}
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, Type};
-use rand::{distributions::Alphanumeric, Rng};
-use sha2::{Sha256, Digest};
-use jsonwebtoken::{encode, decode, Header, Algorithm, Validation, EncodingKey, DecodingKey};
-use jsonwebtoken::errors::ErrorKind;
-use std::time::SystemTime;
-use sqlx::sqlite::SqliteQueryResult;
+use sqlx::Type;
 use crate::AppState;
-
-const SALT_LENGTH: usize = 12;
 
 #[derive(Deserialize, Type, Serialize, PartialEq)]
 pub enum AuthLevel {
@@ -65,61 +65,22 @@ pub struct LoginUserSchema {
 }
 
 // ------------------------------------------------------------------------------------------------
-// JWT
-
-#[derive(Serialize, Deserialize)]
-struct Claims {
-    exp: usize, // UTC timestamp, expiration
-    iat: usize, // UTC timestamp, time issued at
-    sub: String
-}
-
-fn encode_jwt(app_secret: &str, user_id: i64, jwt_lifetime: usize) -> String {
-    let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("System time set to before UNIX_EPOCH").as_secs() as usize;
-    let expires_at = now + jwt_lifetime;
-    let claims = Claims {
-        exp: expires_at,
-        iat: now,
-        sub: user_id.to_string()
-    };
-    // We are using the default Header algorithm so this should be infallible
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(app_secret.as_bytes())).unwrap()
-}
-
-fn decode_jwt(web_token: &str, app_secret: &str) -> Result<i64, String> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.set_required_spec_claims(&["exp", "iat", "sub"]);
-    let claims = match decode::<Claims>(web_token, &DecodingKey::from_secret(app_secret.as_bytes()), &validation) {
-        Ok(c) => c,
-        Err(err) => {
-            let err_msg = match *err.kind() {
-                ErrorKind::InvalidToken => "Invalid JWT",
-                ErrorKind::InvalidSubject => "Invalid JWT",
-                ErrorKind::ExpiredSignature => "JWT has expired",
-                ErrorKind::InvalidSignature => "Invalid JWT Signature",
-                _ => "Unknown error while processing JWT"
-            };
-            return Err(err_msg.to_string())
-        }
-    };
-    match claims.claims.sub.parse::<i64>() {
-        Ok(id) => Ok(id),
-        Err(_) => Err("Failed to parse user ID from JWT".to_string())
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
 // Endpoints
 
 // TODO: The error handling here is pretty bad. It was done quickly to get an MVP off the ground
 //       but it really needs to be refactored
 
 pub fn auth_routes() -> Router<AppState> {
+    // TODO: This routing is not terribly logically consistent and should be re-done
+    // Should have a consistent GET/PUT/DELETE for /user/me and /user/:user_id
+    //  each should point to their own custom endpoint function that handle the difference between
+    //  /me and an id and then call a shared db/business-logic function
     Router::<AppState>::new()
         .route("/user", post(create_user))
         .route("/user", get(get_user_by_username))
         .route("/user/:user_id", delete(delete_user_by_id))
         .route("/user/me", delete(delete_user_me))
+        .route("/user/me", get(get_user_me))
         .route("/user/auth", post(auth_user))
 }
 // TODO: GET user/me and/or /user/:user_id
@@ -204,6 +165,15 @@ async fn get_user_by_username(State(app_state): State<AppState>, headers: Header
     }
 }
 
+async fn get_user_me(State(app_state): State<AppState>, headers: HeaderMap) -> Result<(StatusCode, Json<ReturnUser>), (StatusCode, String)> {
+    match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
+        Ok(user) => {
+            Ok((StatusCode::OK, Json(user.into())))
+        },
+        Err(e) => Err((StatusCode::NOT_FOUND, e))
+    }
+}
+
 async fn delete_user_by_id(State(app_state): State<AppState>, headers: HeaderMap, Path(user_id): Path<i64>) -> Result<StatusCode, (StatusCode, Json<String>)> {
     // Get the JWT from the Authorization header and decode it
     let token_user_id = match get_and_decode_auth_token(&headers, app_state.config.app_secret.as_str()) {
@@ -252,77 +222,4 @@ async fn delete_user_me(State(app_state): State<AppState>, headers: HeaderMap) -
         Ok(_) => Ok(StatusCode::OK),
         Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json("Failed to delete user".to_string())))
     }
-}
-
-// ------------------------------------------------------------------------------------------------
-// Misc
-
-fn get_and_decode_auth_token(headers: &HeaderMap, app_secret: &str) -> Result<i64, String> {
-    let token = match get_auth_token(&headers) {
-        Ok(t) => t,
-        Err(e) => return Err(e)
-    };
-    match decode_jwt(token, app_secret) {
-        Ok(id) => Ok(id),
-        Err(e) => return Err(e)
-    }
-}
-
-fn get_auth_token(headers: &HeaderMap) -> Result<&str, String> {
-    let token = match headers.get(AUTHORIZATION) {
-        Some(t) => t,
-        None => return Err("Missing 'Authorization' header".to_owned())
-    };
-    match token.to_str() {
-        Ok(as_str) => Ok(as_str),
-        Err(_) => Err("Failed to read 'Authorization' header".to_owned())
-    }
-}
-
-async fn db_get_user_by_username(pool: &SqlitePool, username: &str) -> Option<User> {
-    match sqlx::query_as!(User, "SELECT * FROM users WHERE username = ?", username)
-        .fetch_one(pool)
-        .await {
-        Ok(user) => Some(user),
-        // TODO: Actually handle this error
-        Err(_) => None
-    }
-}
-
-async fn db_delete_user(pool: &SqlitePool, user_id: i64) -> Result<SqliteQueryResult, ()> {
-    match sqlx::query!(
-        "DELETE FROM users WHERE id = ?",
-        user_id
-    ).execute(pool).await {
-        // Should add actual error handling here, for now all we care about is whether or not
-        // the query succeeded or failed
-        Ok(res) => Ok(res),
-        Err(_) => Err(())
-    }
-}
-
-async fn db_get_user_by_id(pool: &SqlitePool, id: i64) -> Option<User> {
-    match sqlx::query_as!(User, "SELECT * FROM users WHERE id = ?", id)
-        .fetch_one(pool)
-        .await {
-        Ok(user) => Some(user),
-        // TODO: Actually handle this error
-        Err(_) => None
-    }
-}
-
-fn hash_password(mut password: String, salt: &str) -> String {
-    password.push_str(salt);
-    let mut hasher = Sha256::new();
-    hasher.update(password);
-    let result = hasher.finalize();
-    format!("{:X}", result)
-}
-
-fn generate_salt() -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(SALT_LENGTH)
-        .map(char::from)
-        .collect()
 }

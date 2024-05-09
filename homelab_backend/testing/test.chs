@@ -1,3 +1,7 @@
+// TODO: Rename this file, make an actual folder structure to store it in, go over and re-do it slightly to make it
+//       a more official test
+// TODO: Uncomment commented assertions after ChimeraScript issues are resolved (string special char support, etc)
+
 [test]
 case user_crud() {
     var username = LITERAL "test";
@@ -37,28 +41,37 @@ case user_crud() {
     var token = POST /api/user/auth username=(username) password=(password);
     ASSERT STATUS (token) 201;
 
-    // TODO: Get user
-    // TODO: Need to create a `GET /user/me` endpoint
+    // Get a user
+    var user = GET /api/user/me authorization:(token.body);
+    ASSERT STATUS (user) 200;
+    ASSERT EQUALS (user.body.username) (username);
 
     // TODO: Update user
 
-    case invalid_perms() {
-        // Create a second user, don't assert in case they already exist
-        POST /api/user username="dummy" password="dummy";
+    case user_permissions() {
+         case other_user_permissions() {
+             // Create a second user, don't assert in case they already exist
+             POST /api/user username="dummy" password="dummy";
 
-        // Auth as a second user
-        var authUserTwo = POST /api/user/auth username="dummy" password="dummy";
-        ASSERT STATUS (authUserTwo) 201;
+             // Auth as a second user
+             var authUserTwo = POST /api/user/auth username="dummy" password="dummy";
+             ASSERT STATUS (authUserTwo) 201;
 
-        // Get the first user as the second
-        var otherUser = GET /api/user?username=(username) authorization:(authUserTwo.body);
-        ASSERT STATUS (otherUser) 200;
+             // Get the first user as the second
+             var otherUser = GET /api/user?username=(username) authorization:(authUserTwo.body);
+             ASSERT STATUS (otherUser) 200;
 
-        // TODO Update other, fail
+             // TODO Update other, fail
 
-        // Try to delete another user
-        var deleteOther = DELETE /api/user/(otherUser.body.id) authorization:(authUserTwo.body);
-        ASSERT STATUS (deleteOther) 403;
+             // Try to delete another user
+             var deleteOther = DELETE /api/user/(otherUser.body.id) authorization:(authUserTwo.body);
+             ASSERT STATUS (deleteOther) 403;
+         }
+         case admin_user_permissions() {
+            // Auth as an admin
+            var adminRes = POST /api/user/auth username="admin" password="test";
+            ASSERT STATUS (adminRes) 201;
+         }
     }
 
     // Delete the user
@@ -80,6 +93,14 @@ case auth_user() {
     var res = POST /api/user/auth username=(username) password=(password);
     ASSERT STATUS (res) 201;
 
+    // Make a request with valid auth
+    var goodAuth = GET /api/user/me authorization:(res.body);
+    ASSERT STATUS (goodAuth) 200;
+
+    // Make a request with invalid auth
+    var badAuth = GET /api/user/me authorization:"InvalidTokenString";
+    ASSERT STATUS (badAuth) 404;
+
     // Auth as the user with an invalid password
     var badPasswordRes = POST /api/user/auth username=(username) password="wrongPassword";
     ASSERT STATUS (badPasswordRes) 404;
@@ -88,16 +109,6 @@ case auth_user() {
     var badRes = POST /api/user/auth username="idontexist" password=(password);
     ASSERT STATUS (badRes) 404;
     // ASSERT EQUALS (badRes.body) "No such user with username 'idontexist'";
-}
 
-[test]
-case admin_user() {
-    // Auth as an admin
-    var adminRes = POST /api/user/auth username="admin" password="test";
-    ASSERT STATUS (adminRes) 201;
+    // Auth as a second user
 }
-
-// NEED TO TEST TOKENS
-// Try to use a token meant for user-1 as a user-2
-// Completely invalid random nonsense as a token
-// Valid token works
