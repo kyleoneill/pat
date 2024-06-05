@@ -35,7 +35,7 @@ case user_crud() {
     // Try to create the user again, assert we get an error
     var again = POST /api/user username=(username) password=(password);
     ASSERT STATUS (again) 400;
-    // ASSERT EQUALS (again.body) "Username '(username)' is already taken";
+    ASSERT EQUALS (again.body) "Username '(username)' is already taken";
 
     // Auth as the user
     var token = POST /api/user/auth username=(username) password=(password);
@@ -65,7 +65,7 @@ case user_crud() {
 
              // Try to delete another user
              var deleteOther = DELETE /api/user/(otherUser.body.id) authorization:(authUserTwo.body);
-             ASSERT STATUS (deleteOther) 403;
+             ASSERT STATUS (deleteOther) 403 "Failed to assert that one user cannot delete another user";
          }
          case admin_user_permissions() {
             // Auth as an admin
@@ -108,7 +108,5 @@ case auth_user() {
     // Auth as a user that does not exist
     var badRes = POST /api/user/auth username="idontexist" password=(password);
     ASSERT STATUS (badRes) 404;
-    // ASSERT EQUALS (badRes.body) "No such user with username 'idontexist'";
-
-    // Auth as a second user
+    ASSERT EQUALS (badRes.body) "No such user with username 'idontexist', or invalid password";
 }

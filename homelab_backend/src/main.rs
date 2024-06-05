@@ -1,29 +1,26 @@
 #[macro_use]
 extern crate dotenv_codegen;
 
-use std::time::Duration;
 use sqlx::sqlite::SqlitePool;
+use std::time::Duration;
 
 mod api;
 use api::{notes, user};
 
-use axum::{
-    routing::get,
-    Router
-};
+use axum::{routing::get, Router};
 
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
     timeout::TimeoutLayer,
-    ServiceBuilderExt
+    ServiceBuilderExt,
 };
 // use tower_http::validate_request::ValidateRequestHeaderLayer;
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: SqlitePool,
-    pub config: Config
+    pub config: Config,
 }
 
 #[derive(Debug, Clone)]
@@ -31,7 +28,7 @@ pub struct Config {
     pub database_url: String,
     pub jwt_secret: String,
     pub jwt_max_age: i32,
-    pub app_secret: String
+    pub app_secret: String,
 }
 
 impl Config {
@@ -43,8 +40,10 @@ impl Config {
         Self {
             database_url,
             jwt_secret,
-            jwt_max_age: jwt_max_age.parse::<i32>().expect("JWT_MAX_AGE was not an i32"),
-            app_secret
+            jwt_max_age: jwt_max_age
+                .parse::<i32>()
+                .expect("JWT_MAX_AGE was not an i32"),
+            app_secret,
         }
     }
 }
@@ -52,7 +51,9 @@ impl Config {
 #[tokio::main]
 async fn main() {
     let config = Config::init();
-    let pool = SqlitePool::connect(config.database_url.as_str()).await.expect("Failed to connect to database");
+    let pool = SqlitePool::connect(config.database_url.as_str())
+        .await
+        .expect("Failed to connect to database");
     let state = AppState { db: pool, config };
 
     // initialize tracing
@@ -79,7 +80,9 @@ async fn main() {
         .layer(middleware);
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
     println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
