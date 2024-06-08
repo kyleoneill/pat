@@ -5,6 +5,8 @@ use sqlx::sqlite::SqlitePool;
 use std::time::Duration;
 
 mod api;
+mod testing;
+
 use api::{notes, user};
 
 use axum::{routing::get, Router};
@@ -48,22 +50,18 @@ impl Config {
     }
 }
 
-#[tokio::main]
-async fn main() {
+pub async fn generate_app() -> Router {
     let config = Config::init();
     let pool = SqlitePool::connect(config.database_url.as_str())
         .await
         .expect("Failed to connect to database");
     let state = AppState { db: pool, config };
 
-    // initialize tracing
-    tracing_subscriber::fmt::init();
-
-    let cors = CorsLayer::new().allow_origin(Any);
-
     let api_routes = Router::<AppState>::new()
         .merge(notes::notes_routes())
         .merge(user::auth_routes());
+
+    let cors = CorsLayer::new().allow_origin(Any);
 
     let middleware = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_secs(10)))
@@ -71,19 +69,25 @@ async fn main() {
         //.layer(ValidateRequestHeaderLayer::accept("application/json"))
         .compression();
 
-    // build our application with a route
-    let app: Router = Router::<AppState>::new()
+    Router::<AppState>::new()
         // `GET /` goes to `root`
         .route("/", get(root))
         .nest("/api", api_routes)
         .with_state(state)
-        .layer(middleware);
+        .layer(middleware)
+}
+
+#[tokio::main]
+async fn main() {
+    // initialize tracing
+    tracing_subscriber::fmt::init();
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
     println!("listening on {}", listener.local_addr().unwrap());
+    let app = generate_app().await;
     axum::serve(listener, app).await.unwrap();
 }
 

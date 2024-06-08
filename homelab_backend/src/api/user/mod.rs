@@ -76,14 +76,14 @@ pub fn auth_routes() -> Router<AppState> {
     //  /me and an id and then call a shared db/business-logic function
     Router::<AppState>::new()
         .route("/user", post(create_user))
+        .route("/user/auth", post(auth_user))
         .route("/user", get(get_user_by_username))
+        .route("/user/me", get(get_user_me))
         .route("/user/:user_id", delete(delete_user_by_id))
         .route("/user/me", delete(delete_user_me))
-        .route("/user/me", get(get_user_me))
-        .route("/user/auth", post(auth_user))
 }
-// TODO: GET user/me and/or /user/:user_id
-// TODO: PUT user/me and/or /user/:user_id
+// TODO: GET /user/:user_id
+// TODO: PUT user/me and /user/:user_id
 
 async fn auth_user(
     State(app_state): State<AppState>,
