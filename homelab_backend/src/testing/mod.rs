@@ -40,7 +40,11 @@ pub async fn initialize() {
             let addr = listener.local_addr().unwrap();
             // TODO: Might want to store this JoinHandle from spawn() so I can clean up resources
             //       correctly at the end of testing?
-            tokio::spawn(async move { axum::serve(listener, generate_app().await).await.unwrap() });
+            tokio::spawn(async move {
+                axum::serve(listener, generate_app(true).await)
+                    .await
+                    .unwrap()
+            });
             let client =
                 hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
                     .build_http();

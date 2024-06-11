@@ -28,6 +28,7 @@ pub struct AppState {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database_url: String,
+    pub test_database_url: String,
     pub jwt_secret: String,
     pub jwt_max_age: i32,
     pub app_secret: String,
@@ -36,11 +37,13 @@ pub struct Config {
 impl Config {
     pub fn init() -> Self {
         let database_url = dotenv!("DATABASE_URL").to_owned();
+        let test_database_url = dotenv!("DATABASE_URL").to_owned();
         let jwt_secret = dotenv!("JWT_SECRET").to_owned();
         let jwt_max_age = dotenv!("JWT_MAX_AGE").to_owned();
         let app_secret = dotenv!("APP_SECRET").to_owned();
         Self {
             database_url,
+            test_database_url,
             jwt_secret,
             jwt_max_age: jwt_max_age
                 .parse::<i32>()
@@ -50,9 +53,13 @@ impl Config {
     }
 }
 
-pub async fn generate_app() -> Router {
+pub async fn generate_app(is_test_app: bool) -> Router {
     let config = Config::init();
-    let pool = SqlitePool::connect(config.database_url.as_str())
+    let databse_url = match is_test_app {
+        true => config.database_url.as_str(),
+        false => config.test_database_url.as_str(),
+    };
+    let pool = SqlitePool::connect(databse_url)
         .await
         .expect("Failed to connect to database");
     let state = AppState { db: pool, config };
@@ -87,7 +94,7 @@ async fn main() {
         .await
         .unwrap();
     println!("listening on {}", listener.local_addr().unwrap());
-    let app = generate_app().await;
+    let app = generate_app(false).await;
     axum::serve(listener, app).await.unwrap();
 }
 
