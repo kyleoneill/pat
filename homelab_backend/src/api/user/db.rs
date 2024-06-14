@@ -1,6 +1,5 @@
-use crate::api::user::User;
-use sqlx::sqlite::SqliteQueryResult;
-use sqlx::SqlitePool;
+use super::User;
+use sqlx::{sqlite::SqliteQueryResult, SqlitePool};
 
 pub async fn db_get_user_by_username(pool: &SqlitePool, username: &str) -> Option<User> {
     match sqlx::query_as!(User, "SELECT * FROM users WHERE username = ?", username)

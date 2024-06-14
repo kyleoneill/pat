@@ -1,5 +1,5 @@
 mod db;
-mod jwt;
+pub(crate) mod jwt;
 mod util;
 
 use db::{db_delete_user, db_get_user_by_id, db_get_user_by_username};
@@ -35,17 +35,17 @@ impl From<i64> for AuthLevel {
 
 #[derive(Deserialize)]
 pub struct User {
-    pub id: i64,
-    pub username: String,
-    pub password: String,
-    pub auth_level: AuthLevel,
-    pub salt: String,
+    id: i64,
+    username: String,
+    password: String,
+    auth_level: AuthLevel,
+    salt: String,
 }
 
 #[derive(Serialize)]
 pub struct ReturnUser {
-    pub id: i64,
-    pub username: String,
+    id: i64,
+    username: String,
 }
 
 impl From<User> for ReturnUser {
@@ -69,12 +69,13 @@ pub struct LoginUserSchema {
 // TODO: The error handling here is pretty bad. It was done quickly to get an MVP off the ground
 //       but it really needs to be refactored
 
-pub fn auth_routes() -> Router<AppState> {
+pub fn user_routes() -> Router<AppState> {
     // TODO: This routing is not terribly logically consistent and should be re-done
     // Should have a consistent GET/PUT/DELETE for /user/me and /user/:user_id
     //  each should point to their own custom endpoint function that handle the difference between
     //  /me and an id and then call a shared db/business-logic function
     Router::<AppState>::new()
+        // TODO: These should all be pluralized as "/users"
         .route("/user", post(create_user))
         .route("/user/auth", post(auth_user))
         .route("/user", get(get_user_by_username))
@@ -82,8 +83,8 @@ pub fn auth_routes() -> Router<AppState> {
         .route("/user/:user_id", delete(delete_user_by_id))
         .route("/user/me", delete(delete_user_me))
 }
-// TODO: GET /user/:user_id
-// TODO: PUT user/me and /user/:user_id
+// TODO: GET /users/:user_id
+// TODO: PUT /users/me and /users/:user_id
 
 async fn auth_user(
     State(app_state): State<AppState>,
@@ -158,6 +159,7 @@ async fn create_user(
 
     // Create a user in the database
     // TODO: Error handling here
+    // TODO: This should be in the db file
     let username = credentials.username.clone();
     let _ = sqlx::query!(
         "INSERT INTO users (username, password, auth_level, salt) VALUES (?, ?, ?, ?)",

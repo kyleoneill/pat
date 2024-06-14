@@ -6,5 +6,13 @@ CREATE TABLE users (
     salt VARCHAR (255) NOT NULL
 );
 
+CREATE TABLE logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    method VARCHAR (255) NOT NULL,
+    uri VARCHAR (255) NOT NULL,
+    user_id INTEGER NOT NULL,
+    date_time INTEGER NOT NULL
+);
+
 -- Password is 'test'
 INSERT INTO users (username, password, auth_level, salt) VALUES ('admin', 'D600AD1AAEA6261F2B5923FE076AE08B42688CDF6051FEF2D8CC4ED303D19E22', 'Admin', 'zTGNpsiiXQ5f');

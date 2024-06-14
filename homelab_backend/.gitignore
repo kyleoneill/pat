@@ -1,3 +1,5 @@
+_*.chs
+
 *.env
 
 .idea/

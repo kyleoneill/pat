@@ -7,17 +7,19 @@ use std::time::Duration;
 mod api;
 mod testing;
 
-use api::{notes, user};
+use api::{logs, notes, user};
 
-use axum::{routing::get, Router};
+use axum::{http::Request, routing::get, Router};
 
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
     timeout::TimeoutLayer,
+    trace::TraceLayer,
     ServiceBuilderExt,
 };
-// use tower_http::validate_request::ValidateRequestHeaderLayer;
+
+use tracing::Span;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -62,13 +64,44 @@ pub async fn generate_app(is_test_app: bool) -> Router {
     let pool = SqlitePool::connect(databse_url)
         .await
         .expect("Failed to connect to database");
+
+    let app_secret = config.app_secret.clone();
+    let handle = pool.clone();
+
     let state = AppState { db: pool, config };
 
     let api_routes = Router::<AppState>::new()
         .merge(notes::notes_routes())
-        .merge(user::auth_routes());
+        .merge(user::user_routes())
+        .merge(logs::log_routes());
 
     let cors = CorsLayer::new().allow_origin(Any);
+
+    let trace_layer = TraceLayer::new_for_http()
+        //.make_span_with(|request: &Request<_>| {})
+        .on_request(move |request: &Request<_>, _span: &Span| {
+            // If a request does not have an associated user id, mark it as -1
+            let user_id =
+                user::jwt::get_and_decode_auth_token(request.headers(), app_secret.as_str())
+                    .unwrap_or(-1);
+            // TODO: This does not work. I need to await this in order for it to run, but the closure
+            //       cannot be async. Will likely need to
+            //       1. Create a task system
+            //       2. Save this log to a vec which itself is in an Arc or some global
+            //       3. Create a task which runs every x seconds and empties the log vec, writing
+            //          each item in it to the database
+            #[allow(clippy::let_underscore_future)]
+            let _ = logs::create_log(
+                &handle,
+                request.method().to_string(),
+                request.uri().to_string(),
+                user_id,
+            );
+        });
+    // .on_response(|_response: &Response, _latency: Duration, _span: &Span| {})
+    // .on_body_chunk(|_chunk: &Bytes, _latency: Duration, _span: &Span| {})
+    // .on_eos(|_trailers: Option<&HeaderMap>, _stream_duration: Duration, _span: &Span| {})
+    // .on_failure(|_error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {});
 
     let middleware = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_secs(10)))
@@ -82,6 +115,7 @@ pub async fn generate_app(is_test_app: bool) -> Router {
         .nest("/api", api_routes)
         .with_state(state)
         .layer(middleware)
+        .layer(trace_layer)
 }
 
 #[tokio::main]
