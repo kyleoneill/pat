@@ -2,7 +2,8 @@
 extern crate dotenv_codegen;
 
 use sqlx::sqlite::SqlitePool;
-use std::time::Duration;
+use std::sync::mpsc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod api;
 mod testing;
@@ -11,6 +12,7 @@ use api::{logs, notes, user};
 
 use axum::{http::Request, routing::get, Router};
 
+use tokio::{task, time};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -39,7 +41,7 @@ pub struct Config {
 impl Config {
     pub fn init() -> Self {
         let database_url = dotenv!("DATABASE_URL").to_owned();
-        let test_database_url = dotenv!("DATABASE_URL").to_owned();
+        let test_database_url = dotenv!("TEST_DATABASE_URL").to_owned();
         let jwt_secret = dotenv!("JWT_SECRET").to_owned();
         let jwt_max_age = dotenv!("JWT_MAX_AGE").to_owned();
         let app_secret = dotenv!("APP_SECRET").to_owned();
@@ -56,27 +58,30 @@ impl Config {
 }
 
 pub async fn generate_app(is_test_app: bool) -> Router {
+    // Set up app config and the database pool
     let config = Config::init();
-    let databse_url = match is_test_app {
-        true => config.database_url.as_str(),
-        false => config.test_database_url.as_str(),
+    let database_url = match is_test_app {
+        true => config.test_database_url.as_str(),
+        false => config.database_url.as_str(),
     };
-    let pool = SqlitePool::connect(databse_url)
+    let pool = SqlitePool::connect(database_url)
         .await
         .expect("Failed to connect to database");
 
+    // Copy the app secret and db handle as they are passed to tasks and on_request events
     let app_secret = config.app_secret.clone();
     let handle = pool.clone();
 
-    let state = AppState { db: pool, config };
-
+    // Define the API routes
     let api_routes = Router::<AppState>::new()
         .merge(notes::notes_routes())
         .merge(user::user_routes())
         .merge(logs::log_routes());
 
-    let cors = CorsLayer::new().allow_origin(Any);
+    // Create a channel to pass log information to the db write task
+    let (log_tx, log_rx) = mpsc::channel();
 
+    // Define the trace layer which handles request/response events
     let trace_layer = TraceLayer::new_for_http()
         //.make_span_with(|request: &Request<_>| {})
         .on_request(move |request: &Request<_>, _span: &Span| {
@@ -84,31 +89,48 @@ pub async fn generate_app(is_test_app: bool) -> Router {
             let user_id =
                 user::jwt::get_and_decode_auth_token(request.headers(), app_secret.as_str())
                     .unwrap_or(-1);
-            // TODO: This does not work. I need to await this in order for it to run, but the closure
-            //       cannot be async. Will likely need to
-            //       1. Create a task system
-            //       2. Save this log to a vec which itself is in an Arc or some global
-            //       3. Create a task which runs every x seconds and empties the log vec, writing
-            //          each item in it to the database
-            #[allow(clippy::let_underscore_future)]
-            let _ = logs::create_log(
-                &handle,
+            let date_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
+            let new_task = logs::tasks::LogCreationTask::new(
                 request.method().to_string(),
                 request.uri().to_string(),
                 user_id,
+                date_time,
             );
+            println!("about to send");
+            log_tx.send(new_task).unwrap();
         });
     // .on_response(|_response: &Response, _latency: Duration, _span: &Span| {})
     // .on_body_chunk(|_chunk: &Bytes, _latency: Duration, _span: &Span| {})
     // .on_eos(|_trailers: Option<&HeaderMap>, _stream_duration: Duration, _span: &Span| {})
     // .on_failure(|_error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {});
 
+    // Set up middleware, currently a timeout and CORS config
     let middleware = ServiceBuilder::new()
-        .layer(TimeoutLayer::new(Duration::from_secs(10)))
-        .layer(cors)
+        .layer(TimeoutLayer::new(Duration::from_secs(30)))
+        .layer(CorsLayer::new().allow_origin(Any))
         //.layer(ValidateRequestHeaderLayer::accept("application/json"))
         .compression();
 
+    // Set up tasks
+    #[allow(clippy::let_underscore_future)]
+    let _create_request_logs = task::spawn(async move {
+        // Log creation task will run every 5 seconds
+        let mut interval = time::interval(Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            println!("task running");
+            while let Ok(rec) = log_rx.try_recv() {
+                println!("rx got a value");
+                rec.run_task(&handle).await;
+            }
+        }
+    });
+
+    // Create app state and the router
+    let state = AppState { db: pool, config };
     Router::<AppState>::new()
         // `GET /` goes to `root`
         .route("/", get(root))
@@ -123,7 +145,7 @@ async fn main() {
     // initialize tracing
     tracing_subscriber::fmt::init();
 
-    // run our app with hyper, listening globally on port 3000
+    // run our app with hyper, listening on 127.0.0.1:3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();

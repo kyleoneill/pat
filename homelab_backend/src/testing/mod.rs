@@ -17,13 +17,14 @@ pub static ADDR: OnceLock<SocketAddr> = OnceLock::new();
 
 #[allow(dead_code)]
 pub async fn setup_database() {
-    let database_url = dotenv!("DATABASE_URL").to_owned();
+    let database_url = dotenv!("TEST_DATABASE_URL").to_owned();
     let pool = SqlitePool::connect(database_url.as_str())
         .await
         .expect("Failed to connect to database");
     let _ = sqlx::query!(
             "\
             DELETE FROM users;\
+            DELETE FROM logs;\
             UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'users';\
             INSERT INTO users (username, password, auth_level, salt) VALUES ('admin', 'D600AD1AAEA6261F2B5923FE076AE08B42688CDF6051FEF2D8CC4ED303D19E22', 'Admin', 'zTGNpsiiXQ5f');\
             "
