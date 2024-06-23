@@ -26,6 +26,5 @@ impl LogCreationTask {
         )
         .execute(pool)
         .await;
-        println!("{:?}", res);
     }
 }

@@ -99,7 +99,6 @@ pub async fn generate_app(is_test_app: bool) -> Router {
                 user_id,
                 date_time,
             );
-            println!("about to send");
             log_tx.send(new_task).unwrap();
         });
     // .on_response(|_response: &Response, _latency: Duration, _span: &Span| {})
@@ -121,9 +120,7 @@ pub async fn generate_app(is_test_app: bool) -> Router {
         let mut interval = time::interval(Duration::from_secs(5));
         loop {
             interval.tick().await;
-            println!("task running");
             while let Ok(rec) = log_rx.try_recv() {
-                println!("rx got a value");
                 rec.run_task(&handle).await;
             }
         }
