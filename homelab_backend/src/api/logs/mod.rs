@@ -1,4 +1,4 @@
-mod db;
+pub mod tasks;
 
 use crate::AppState;
 use axum::{
@@ -7,8 +7,6 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
-use sqlx::SqlitePool;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
@@ -36,12 +34,4 @@ async fn get_log_by_id(
     Path(log_id): Path<i64>,
 ) -> Result<(StatusCode, Json<Log>), (StatusCode, Json<String>)> {
     todo!()
-}
-
-pub async fn create_log(pool: &SqlitePool, method: String, uri: String, user_id: i64) {
-    let date_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
-    db::create_log(pool, method, uri, user_id, date_time).await;
 }
