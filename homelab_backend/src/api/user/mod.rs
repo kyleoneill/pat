@@ -1,9 +1,10 @@
-mod db;
+pub mod db;
 pub(crate) mod jwt;
 mod util;
 
+use super::get_user_from_token;
 use db::{db_delete_user, db_get_user_by_id, db_get_user_by_username};
-use jwt::{encode_jwt, get_and_decode_auth_token, get_user_from_token};
+use jwt::{encode_jwt, get_and_decode_auth_token};
 use util::{generate_salt, hash_password};
 
 use crate::AppState;
@@ -42,10 +43,16 @@ pub struct User {
     salt: String,
 }
 
-#[derive(Serialize)]
+impl User {
+    pub fn get_id(&self) -> i64 {
+        self.id
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct ReturnUser {
-    id: i64,
-    username: String,
+    pub id: i64,
+    pub username: String,
 }
 
 impl From<User> for ReturnUser {
@@ -75,13 +82,12 @@ pub fn user_routes() -> Router<AppState> {
     //  each should point to their own custom endpoint function that handle the difference between
     //  /me and an id and then call a shared db/business-logic function
     Router::<AppState>::new()
-        // TODO: These should all be pluralized as "/users"
-        .route("/user", post(create_user))
-        .route("/user/auth", post(auth_user))
-        .route("/user", get(get_user_by_username))
-        .route("/user/me", get(get_user_me))
-        .route("/user/:user_id", delete(delete_user_by_id))
-        .route("/user/me", delete(delete_user_me))
+        .route("/users", post(create_user))
+        .route("/users/auth", post(auth_user))
+        .route("/users", get(get_user_by_username))
+        .route("/users/me", get(get_user_me))
+        .route("/users/:user_id", delete(delete_user_by_id))
+        .route("/users/me", delete(delete_user_me))
 }
 // TODO: GET /users/:user_id
 // TODO: PUT /users/me and /users/:user_id

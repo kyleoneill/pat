@@ -17,7 +17,7 @@ impl LogCreationTask {
         }
     }
     pub async fn run_task(&self, pool: &Pool<Sqlite>) {
-        let res = sqlx::query!(
+        let _res = sqlx::query!(
             "INSERT INTO logs (method, uri, user_id, date_time) VALUES (?, ?, ?, ?)",
             self.method,
             self.uri,

@@ -1,10 +1,7 @@
-use crate::api::user::db::db_get_user_by_id;
-use crate::api::user::User;
 use axum::http::header::{HeaderMap, AUTHORIZATION};
 use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use std::time::SystemTime;
 
 #[derive(Serialize, Deserialize)]
@@ -57,18 +54,6 @@ fn decode_jwt(web_token: &str, app_secret: &str) -> Result<i64, String> {
     match claims.claims.sub.parse::<i64>() {
         Ok(id) => Ok(id),
         Err(_) => Err("Failed to parse user ID from JWT".to_string()),
-    }
-}
-
-pub async fn get_user_from_token(
-    pool: &SqlitePool,
-    headers: &HeaderMap,
-    app_secret: &str,
-) -> Result<User, String> {
-    let user_id = get_and_decode_auth_token(headers, app_secret)?;
-    match db_get_user_by_id(pool, user_id).await {
-        Some(user) => Ok(user),
-        None => Err("No user found for the given authorization token".to_owned()),
     }
 }
 

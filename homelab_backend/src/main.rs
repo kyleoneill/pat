@@ -57,16 +57,9 @@ impl Config {
     }
 }
 
-pub async fn generate_app(is_test_app: bool) -> Router {
+pub async fn generate_app(pool: SqlitePool) -> Router {
     // Set up app config and the database pool
     let config = Config::init();
-    let database_url = match is_test_app {
-        true => config.test_database_url.as_str(),
-        false => config.database_url.as_str(),
-    };
-    let pool = SqlitePool::connect(database_url)
-        .await
-        .expect("Failed to connect to database");
 
     // Copy the app secret and db handle as they are passed to tasks and on_request events
     let app_secret = config.app_secret.clone();
@@ -120,6 +113,9 @@ pub async fn generate_app(is_test_app: bool) -> Router {
         let mut interval = time::interval(Duration::from_secs(5));
         loop {
             interval.tick().await;
+            // TODO: This is making one database op per request, I should be batching these inserts
+            // Ex, make a collection after the tick().await, fill it in the while loop, and then
+            //     after the while loop make one batched db insert
             while let Ok(rec) = log_rx.try_recv() {
                 rec.run_task(&handle).await;
             }
@@ -142,12 +138,18 @@ async fn main() {
     // initialize tracing
     tracing_subscriber::fmt::init();
 
+    // Set up database pool
+    let database_url = dotenv!("DATABASE_URL").to_owned();
+    let pool = SqlitePool::connect(database_url.as_str())
+        .await
+        .expect("Failed to connect to database");
+
     // run our app with hyper, listening on 127.0.0.1:3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
     println!("listening on {}", listener.local_addr().unwrap());
-    let app = generate_app(false).await;
+    let app = generate_app(pool).await;
     axum::serve(listener, app).await.unwrap();
 }
 
