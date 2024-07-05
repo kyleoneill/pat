@@ -14,6 +14,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
+use hyper::body::Bytes;
 use serde::{Deserialize, Serialize};
 use sqlx::Type;
 use std::collections::HashMap;
@@ -49,7 +50,7 @@ impl User {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ReturnUser {
     pub id: i64,
     pub username: String,
@@ -61,6 +62,13 @@ impl From<User> for ReturnUser {
             id: value.id,
             username: value.username,
         }
+    }
+}
+
+impl ReturnUser {
+    #[allow(dead_code)] // used in test
+    pub fn from_bytes(input: &Bytes) -> Self {
+        serde_json::from_slice(input).unwrap()
     }
 }
 

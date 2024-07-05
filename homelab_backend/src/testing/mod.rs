@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod helpers;
 mod log_testing;
 mod user_testing;
@@ -9,19 +11,39 @@ use hyper_util::client::legacy::Client;
 use serde::Serialize;
 use sqlx::sqlite::SqlitePool;
 use std::net::SocketAddr;
-use std::sync::OnceLock;
 use tokio::net::TcpListener;
 
-#[allow(dead_code)]
-pub static SERVER: OnceLock<Client<HttpConnector, Body>> = OnceLock::new();
-#[allow(dead_code)]
-pub static ADDR: OnceLock<SocketAddr> = OnceLock::new();
+pub struct TestHelper {
+    pub client: Client<HttpConnector, Body>,
+    pub address: SocketAddr,
+    pub pool: SqlitePool,
+}
 
-pub static POOL: OnceLock<SqlitePool> = OnceLock::new();
+impl TestHelper {
+    pub async fn init() -> Self {
+        let database_url = dotenv!("TEST_DATABASE_URL").to_owned();
+        let pool = SqlitePool::connect(database_url.as_str())
+            .await
+            .expect("Failed to connect to database");
 
-async fn wipe_database() {
-    let pool = POOL.get().unwrap();
-    let _ = sqlx::query!(
+        let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = generate_app(pool.clone()).await;
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let client =
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build_http();
+        let helper = Self {
+            client,
+            address,
+            pool,
+        };
+        helper.wipe_database().await;
+        helper
+    }
+
+    pub async fn wipe_database(&self) {
+        let _ = sqlx::query!(
             "\
             DELETE FROM users;\
             DELETE FROM logs;\
@@ -29,37 +51,7 @@ async fn wipe_database() {
             UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'logs';\
             INSERT INTO users (username, password, auth_level, salt) VALUES ('admin', 'D600AD1AAEA6261F2B5923FE076AE08B42688CDF6051FEF2D8CC4ED303D19E22', 'Admin', 'zTGNpsiiXQ5f');\
             "
-        ).execute(pool).await;
-}
-
-#[allow(dead_code)]
-pub async fn initialize() {
-    match SERVER.get() {
-        Some(_val) => wipe_database().await,
-        None => {
-            let database_url = dotenv!("TEST_DATABASE_URL").to_owned();
-            let pool = SqlitePool::connect(database_url.as_str())
-                .await
-                .expect("Failed to connect to database");
-            POOL.set(pool.clone()).unwrap();
-
-            let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
-            let addr = listener.local_addr().unwrap();
-            // TODO: Might want to store this JoinHandle from spawn() so I can clean up resources
-            //       correctly at the end of testing?
-            tokio::spawn(async move {
-                axum::serve(listener, generate_app(pool).await)
-                    .await
-                    .unwrap()
-            });
-            let client =
-                hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                    .build_http();
-            SERVER.set(client).unwrap();
-            ADDR.set(addr).unwrap();
-
-            wipe_database().await;
-        }
+        ).execute(&self.pool).await;
     }
 }
 

@@ -149,8 +149,9 @@ async fn main() {
         .await
         .unwrap();
     println!("listening on {}", listener.local_addr().unwrap());
-    let app = generate_app(pool).await;
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, generate_app(pool).await)
+        .await
+        .unwrap();
 }
 
 // TODO: Replace root with something

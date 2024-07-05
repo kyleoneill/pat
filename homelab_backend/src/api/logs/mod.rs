@@ -9,16 +9,24 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use hyper::body::Bytes;
 use serde::{Deserialize, Serialize};
 
 #[allow(dead_code)]
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Log {
     id: i64,
-    method: String,
-    uri: String,
-    user_id: i64,
+    pub method: String,
+    pub uri: String,
+    pub user_id: i64,
     date_time: i64,
+}
+
+impl Log {
+    #[allow(dead_code)] // Used in test
+    pub fn from_bytes_to_vec(input: &Bytes) -> Vec<Self> {
+        serde_json::from_slice(input).unwrap()
+    }
 }
 
 // TODO: Should have a log retention policy/task which auto deletes old tasks.
@@ -80,11 +88,9 @@ async fn get_log_by_id(
                 Json("Log with given id was not found".to_string()),
             )),
         },
-        Err(_e) => {
-            return Err((
-                StatusCode::FORBIDDEN,
-                Json("Invalid or missing authentication".to_string()),
-            ))
-        }
+        Err(_e) => Err((
+            StatusCode::FORBIDDEN,
+            Json("Invalid or missing authentication".to_string()),
+        )),
     }
 }
