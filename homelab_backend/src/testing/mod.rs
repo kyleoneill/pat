@@ -11,6 +11,7 @@ use hyper_util::client::legacy::Client;
 use serde::Serialize;
 use sqlx::sqlite::SqlitePool;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use tokio::net::TcpListener;
 
 pub struct TestHelper {
@@ -26,7 +27,7 @@ impl TestHelper {
             .await
             .expect("Failed to connect to database");
 
-        let listener = TcpListener::bind("127.0.0.1:3000").await.unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let app = generate_app(pool.clone()).await;
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
