@@ -1,26 +1,27 @@
 #[cfg(test)]
 mod user_testing {
     use super::*;
+    use crate::api::user::ReturnUser;
+    use crate::testing::helpers::user_helpers::{auth_user, get_user_me};
+    use crate::testing::{json_bytes, TestHelper};
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
     use http_body_util::BodyExt;
     use serde_json::json;
-
-    use crate::testing::{initialize, json_bytes, ADDR, SERVER};
+    use std::net::SocketAddr;
 
     #[tokio::test]
     async fn user_crud() {
-        initialize().await;
-        let client = SERVER.get().unwrap();
+        let helper = TestHelper::init().await;
 
         let username = "foo";
         let password = "bar";
 
         // Create a new user
-        let create_user_req = create_user_req(username, password);
-        let response = client.request(create_user_req).await.unwrap();
+        let create_user_req = create_user_req(username, password, &helper.address);
+        let response = helper.client.request(create_user_req).await.unwrap();
         assert_eq!(
             response.status(),
             StatusCode::CREATED,
@@ -29,11 +30,12 @@ mod user_testing {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         // TODO: Should almost definitely not be asserting on the ID here, should deserialize
         //       this into a response struct and assert on WhateverStruct.username
-        assert_eq!(&body[..], b"{\"id\":2,\"username\":\"foo\"}");
+        let user = ReturnUser::from_bytes(&body);
+        assert_eq!(user.username.as_str(), "foo");
 
         // Try to create a user where the username is already taken
-        let duplicate_user_req = user_testing::create_user_req(username, password);
-        let response = client.request(duplicate_user_req).await.unwrap();
+        let duplicate_user_req = user_testing::create_user_req(username, password, &helper.address);
+        let response = helper.client.request(duplicate_user_req).await.unwrap();
         assert_eq!(
             response.status(),
             StatusCode::BAD_REQUEST,
@@ -43,34 +45,20 @@ mod user_testing {
         assert_eq!(&body[..], b"\"Username 'foo' is already taken\"");
 
         // Auth with the new user
-        let auth_req = auth_user_req(username, password);
-        let response = client.request(auth_req).await.unwrap();
-        assert_eq!(
-            response.status(),
-            StatusCode::CREATED,
-            "Failed to auth as user"
-        );
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        let foo = body.as_ref();
-        let slice = &foo[1..foo.len() - 1];
-        let token = std::str::from_utf8(slice).unwrap();
+        let token = match auth_user(&helper.client, username, password, &helper.address).await {
+            Ok(t) => t,
+            Err((_status_code, msg)) => panic!("{}", msg),
+        };
 
         // get user
-        let get_me_req = get_user_me_req(token);
-        let response = client.request(get_me_req).await.unwrap();
-        assert_eq!(
-            response.status(),
-            StatusCode::OK,
-            "Failed to get a user with the /me endpoint"
-        );
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        // TODO: See todo above, should deserialize and assert on the username. Also should maybe
-        //       not be returning the id here?
-        assert_eq!(&body[..], b"{\"id\":2,\"username\":\"foo\"}");
+        let user_me = get_user_me(&helper.client, token.as_str(), &helper.address)
+            .await
+            .unwrap();
+        assert_eq!(user_me.username.as_str(), "foo");
 
         // delete user
-        let delete_me_req = delete_me_req(token);
-        let response = client.request(delete_me_req).await.unwrap();
+        let delete_me_req = delete_me_req(token.as_str(), &helper.address);
+        let response = helper.client.request(delete_me_req).await.unwrap();
         assert_eq!(
             response.status(),
             StatusCode::OK,
@@ -80,24 +68,19 @@ mod user_testing {
         // Try to get the user, verify that they were deleted and that their token does not work
         // TODO: Should be getting the user as admin so we know the request is valid and there is
         //       a better confirmation that the user is deleted
-        let get_me_req = get_user_me_req(token);
-        let response = client.request(get_me_req).await.unwrap();
-        assert_eq!(
-            response.status(),
-            StatusCode::NOT_FOUND,
-            "Deleting a user and then trying to get their account should result in a 404"
-        );
-        let body = response.into_body().collect().await.unwrap().to_bytes();
-        assert_eq!(
-            &body[..],
-            b"No user found for the given authorization token"
-        );
+        match get_user_me(&helper.client, token.as_str(), &helper.address).await {
+            Ok(_) => panic!("Deleting a user and then trying to get their account should fail"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::NOT_FOUND,
+                "Getting a user that does not exist should result in a 404 status code"
+            ),
+        };
     }
 
-    fn create_user_req(username: &str, password: &str) -> Request<Body> {
-        let addr = ADDR.get().unwrap();
+    fn create_user_req(username: &str, password: &str, addr: &SocketAddr) -> Request<Body> {
         Request::builder()
-            .uri(format!("http://{addr}/api/user"))
+            .uri(format!("http://{addr}/api/users"))
             .method("POST")
             .header("Host", "localhost")
             .header("Content-Type", "application/json")
@@ -107,35 +90,9 @@ mod user_testing {
             .unwrap()
     }
 
-    fn auth_user_req(username: &str, password: &str) -> Request<Body> {
-        let addr = ADDR.get().unwrap();
+    fn delete_me_req(token: &str, addr: &SocketAddr) -> Request<Body> {
         Request::builder()
-            .uri(format!("http://{addr}/api/user/auth"))
-            .method("POST")
-            .header("Host", "localhost")
-            .header("Content-Type", "application/json")
-            .body(Body::from(json_bytes(
-                json!({"username": username, "password": password}),
-            )))
-            .unwrap()
-    }
-
-    fn get_user_me_req(token: &str) -> Request<Body> {
-        let addr = ADDR.get().unwrap();
-        Request::builder()
-            .uri(format!("http://{addr}/api/user/me"))
-            .method("GET")
-            .header("Host", "localhost")
-            .header("Content-Type", "application/json")
-            .header("authorization", token)
-            .body(Body::from(Body::empty()))
-            .unwrap()
-    }
-
-    fn delete_me_req(token: &str) -> Request<Body> {
-        let addr = ADDR.get().unwrap();
-        Request::builder()
-            .uri(format!("http://{addr}/api/user/me"))
+            .uri(format!("http://{addr}/api/users/me"))
             .method("DELETE")
             .header("Host", "localhost")
             .header("Content-Type", "application/json")

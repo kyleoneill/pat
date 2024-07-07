@@ -15,3 +15,9 @@ error messages:
 #[axum::debug_handler]
 async fn my_endpoint_function() -> Response {  }
 ```
+
+## Testing
+Testing currently must be done on a single thread until I better figure out how to handle global state
+```shell
+cargo test -- --test-threads 1
+```
