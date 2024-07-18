@@ -3,7 +3,9 @@ use sqlx::SqlitePool;
 
 pub mod logs;
 pub mod notes;
+mod return_data;
 pub mod user;
+
 use user::User;
 
 // TODO: This should return an error struct that impls a response so it can be ?'d in an endpoint

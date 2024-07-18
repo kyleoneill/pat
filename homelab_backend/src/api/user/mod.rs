@@ -3,6 +3,7 @@ pub(crate) mod jwt;
 mod util;
 
 use super::get_user_from_token;
+use super::return_data::ReturnData;
 use db::{db_delete_user, db_get_user_by_id, db_get_user_by_username};
 use jwt::{encode_jwt, get_and_decode_auth_token};
 use util::{generate_salt, hash_password};
@@ -10,7 +11,7 @@ use util::{generate_salt, hash_password};
 use crate::AppState;
 use axum::{
     extract::{Path, Query, State},
-    http::{header::HeaderMap, StatusCode},
+    http::header::HeaderMap,
     routing::{delete, get, post},
     Json, Router,
 };
@@ -103,7 +104,7 @@ pub fn user_routes() -> Router<AppState> {
 async fn auth_user(
     State(app_state): State<AppState>,
     Json(credentials): Json<LoginUserSchema>,
-) -> Result<(StatusCode, Json<String>), (StatusCode, Json<String>)> {
+) -> ReturnData<String, String> {
     let pool = &app_state.db;
     match sqlx::query_as!(
         User,
@@ -122,24 +123,22 @@ async fn auth_user(
                     let app_secret = app_state.config.app_secret.as_str();
                     let jwt_lifetime = app_state.config.jwt_max_age as usize;
                     let token = encode_jwt(app_secret, user.id, jwt_lifetime);
-                    Ok((StatusCode::CREATED, Json(token)))
+                    ReturnData::created(token)
                 } else {
-                    Err((
-                        StatusCode::NOT_FOUND,
-                        Json(format!(
-                            "No such user with username '{}', or invalid password",
-                            credentials.username
-                        )),
-                    ))
+                    let ret_data = format!(
+                        "No such user with username '{}', or invalid password",
+                        credentials.username
+                    );
+                    ReturnData::not_found(ret_data)
                 }
             }
-            None => Err((
-                StatusCode::NOT_FOUND,
-                Json(format!(
+            None => {
+                let ret_data = format!(
                     "No such user with username '{}', or invalid password",
                     credentials.username
-                )),
-            )),
+                );
+                ReturnData::not_found(ret_data)
+            }
         },
         Err(_) => panic!("TODO: Auth user error"),
     }
@@ -148,7 +147,7 @@ async fn auth_user(
 async fn create_user(
     State(app_state): State<AppState>,
     Json(credentials): Json<LoginUserSchema>,
-) -> Result<(StatusCode, Json<ReturnUser>), (StatusCode, Json<String>)> {
+) -> ReturnData<ReturnUser, String> {
     let pool = &app_state.db;
 
     // Check the database if this username is already taken
@@ -156,12 +155,9 @@ async fn create_user(
         .await
         .is_some()
     {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(format!(
-                "Username '{}' is already taken",
-                credentials.username
-            )),
+        return ReturnData::bad_request(format!(
+            "Username '{}' is already taken",
+            credentials.username
         ));
     };
 
@@ -186,12 +182,9 @@ async fn create_user(
     .await;
 
     match db_get_user_by_username(pool, credentials.username.as_str()).await {
-        Some(user) => Ok((StatusCode::CREATED, Json(Into::<ReturnUser>::into(user)))),
+        Some(user) => ReturnData::created(Into::<ReturnUser>::into(user)),
         // TODO: Actual error handling here
-        None => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Internal error".to_owned()),
-        )),
+        None => ReturnData::internal_error("Internal Error".to_owned()),
     }
 }
 
@@ -199,15 +192,12 @@ async fn get_user_by_username(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     query_params: Query<HashMap<String, String>>,
-) -> Result<(StatusCode, Json<ReturnUser>), (StatusCode, Json<String>)> {
+) -> ReturnData<ReturnUser, String> {
     // Get the username out of query params
     let username = match query_params.get("username") {
         Some(username) => username,
         None => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json("Missing necessary 'username' query param".to_string()),
-            ))
+            return ReturnData::bad_request("Missing necessary 'username' query param".to_owned())
         }
     };
 
@@ -216,26 +206,23 @@ async fn get_user_by_username(
     let _token_user_id =
         match get_and_decode_auth_token(&headers, app_state.config.app_secret.as_str()) {
             Ok(id) => id,
-            Err(e) => return Err((StatusCode::BAD_REQUEST, Json(e))),
+            Err(e) => return ReturnData::bad_request(e),
         };
 
     // Find and return the user
     match db_get_user_by_username(&app_state.db, username.as_str()).await {
-        Some(user) => Ok((StatusCode::OK, Json(user.into()))),
-        None => Err((
-            StatusCode::NOT_FOUND,
-            Json("Could not find user with the given ID".to_string()),
-        )),
+        Some(user) => ReturnData::ok(Into::<ReturnUser>::into(user)),
+        None => ReturnData::not_found("Could not find user with the given ID".to_string()),
     }
 }
 
 async fn get_user_me(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-) -> Result<(StatusCode, Json<ReturnUser>), (StatusCode, String)> {
+) -> ReturnData<ReturnUser, String> {
     match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
-        Ok(user) => Ok((StatusCode::OK, Json(user.into()))),
-        Err(e) => Err((StatusCode::NOT_FOUND, e)),
+        Ok(user) => ReturnData::ok(Into::<ReturnUser>::into(user)),
+        Err(e) => ReturnData::not_found(e),
     }
 }
 
@@ -243,23 +230,18 @@ async fn delete_user_by_id(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Path(user_id): Path<i64>,
-) -> Result<StatusCode, (StatusCode, Json<String>)> {
+) -> ReturnData<(), String> {
     // Get the JWT from the Authorization header and decode it
     let token_user_id =
         match get_and_decode_auth_token(&headers, app_state.config.app_secret.as_str()) {
             Ok(id) => id,
-            Err(e) => return Err((StatusCode::BAD_REQUEST, Json(e))),
+            Err(e) => return ReturnData::bad_request(e),
         };
 
     // Get the account of the id from the path
     let user = match db_get_user_by_id(&app_state.db, user_id).await {
         Some(user) => user,
-        None => {
-            return Err((
-                StatusCode::NOT_FOUND,
-                Json("Could not find user with the given ID".to_string()),
-            ))
-        }
+        None => return ReturnData::not_found("Could not find user with the given ID".to_string()),
     };
 
     // Check if the requester id matches the account being deleted
@@ -269,17 +251,15 @@ async fn delete_user_by_id(
         match db_get_user_by_id(&app_state.db, token_user_id).await {
             Some(user) => {
                 if user.auth_level != AuthLevel::Admin {
-                    return Err((
-                        StatusCode::FORBIDDEN,
-                        Json("Cannot delete an account you do not have access to".to_string()),
-                    ));
+                    return ReturnData::forbidden(
+                        "Cannot delete an account you do not have access to".to_string(),
+                    );
                 }
             }
             None => {
-                return Err((
-                    StatusCode::NOT_FOUND,
-                    Json("Could not find user matching the Authorization token".to_string()),
-                ))
+                return ReturnData::not_found(
+                    "Could not find user matching the Authorization token".to_string(),
+                )
             }
         };
     };
@@ -287,32 +267,26 @@ async fn delete_user_by_id(
     // Delete the user
     match db_delete_user(&app_state.db, user.id).await {
         // TODO: Should check .rows_affected() on the return here and error if it is anything other than 1
-        Ok(_) => Ok(StatusCode::OK),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Failed to delete user".to_string()),
-        )),
+        Ok(_) => ReturnData::ok(()),
+        Err(_) => ReturnData::internal_error("Failed to delete user".to_owned()),
     }
 }
 
 async fn delete_user_me(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-) -> Result<StatusCode, (StatusCode, Json<String>)> {
+) -> ReturnData<(), String> {
     // Get the JWT from the Authorization header and decode it
     let token_user_id =
         match get_and_decode_auth_token(&headers, app_state.config.app_secret.as_str()) {
             Ok(id) => id,
-            Err(e) => return Err((StatusCode::BAD_REQUEST, Json(e))),
+            Err(e) => return ReturnData::bad_request(e),
         };
 
     // Delete the user
     match db_delete_user(&app_state.db, token_user_id).await {
         // TODO: Should check .rows_affected() on the return here and error if it is anything other than 1
-        Ok(_) => Ok(StatusCode::OK),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Failed to delete user".to_string()),
-        )),
+        Ok(_) => ReturnData::ok(()),
+        Err(_) => ReturnData::internal_error("Failed to delete user".to_owned()),
     }
 }
