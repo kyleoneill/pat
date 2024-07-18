@@ -2,12 +2,13 @@ mod db;
 pub mod tasks;
 
 use super::get_user_from_token;
+use super::return_data::ReturnData;
 use crate::AppState;
 use axum::{
     extract::{Path, State},
-    http::{header::HeaderMap, StatusCode},
+    http::{header::HeaderMap},
     routing::get,
-    Json, Router,
+    Router,
 };
 use hyper::body::Bytes;
 use serde::{Deserialize, Serialize};
@@ -42,7 +43,7 @@ pub fn log_routes() -> Router<AppState> {
 async fn get_logs(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-) -> Result<(StatusCode, Json<Vec<Log>>), (StatusCode, Json<String>)> {
+) -> ReturnData<Vec<Log>, String> {
     // TODO: This should optionally return all logs if the requester provides a flag for "all logs" and is an admin
     let user = match get_user_from_token(
         &app_state.db,
@@ -52,19 +53,11 @@ async fn get_logs(
     .await
     {
         Ok(user) => user,
-        Err(_e) => {
-            return Err((
-                StatusCode::FORBIDDEN,
-                Json("Invalid or missing authentication".to_string()),
-            ))
-        }
+        Err(_e) => return ReturnData::forbidden("Invalid or missing authentication".to_string()),
     };
     match db::db_get_logs_for_user(&app_state.db, user.get_id()).await {
-        Some(res) => Ok((StatusCode::OK, Json(res))),
-        None => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Internal error while accessing database".to_string()),
-        )),
+        Some(res) => ReturnData::ok(res),
+        None => ReturnData::internal_error("Internal error while accessing database".to_string()),
     }
 }
 
@@ -72,7 +65,7 @@ async fn get_log_by_id(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Path(log_id): Path<i64>,
-) -> Result<(StatusCode, Json<Log>), (StatusCode, Json<String>)> {
+) -> ReturnData<Log, String> {
     // This match is just made for auth, we don't care about the user
     match get_user_from_token(
         &app_state.db,
@@ -82,15 +75,9 @@ async fn get_log_by_id(
     .await
     {
         Ok(_) => match db::db_get_log_by_id(&app_state.db, log_id).await {
-            Some(log) => Ok((StatusCode::OK, Json(log))),
-            None => Err((
-                StatusCode::NOT_FOUND,
-                Json("Log with given id was not found".to_string()),
-            )),
+            Some(log) => ReturnData::ok(log),
+            None => ReturnData::not_found("Log with given id was not found".to_string()),
         },
-        Err(_e) => Err((
-            StatusCode::FORBIDDEN,
-            Json("Invalid or missing authentication".to_string()),
-        )),
+        Err(_e) => ReturnData::forbidden("Invalid or missing authentication".to_string()),
     }
 }

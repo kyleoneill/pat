@@ -11,7 +11,6 @@ use hyper_util::client::legacy::Client;
 use serde::Serialize;
 use sqlx::sqlite::SqlitePool;
 use std::net::SocketAddr;
-use std::str::FromStr;
 use tokio::net::TcpListener;
 
 pub struct TestHelper {
