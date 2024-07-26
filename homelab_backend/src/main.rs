@@ -102,7 +102,7 @@ pub async fn generate_app(pool: SqlitePool) -> Router {
     // Set up middleware, currently a timeout and CORS config
     let middleware = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_secs(30)))
-        .layer(CorsLayer::new().allow_origin(Any))
+        .layer(CorsLayer::new().allow_origin(Any).allow_headers(Any))
         //.layer(ValidateRequestHeaderLayer::accept("application/json"))
         .compression();
 
