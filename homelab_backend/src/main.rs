@@ -6,9 +6,11 @@ use std::sync::mpsc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod api;
+pub mod error_handler;
+mod models;
 mod testing;
 
-use api::{logs, notes, user};
+use api::{logs, notes, reminder_controller, user};
 
 use axum::{http::Request, routing::get, Router};
 
@@ -69,7 +71,8 @@ pub async fn generate_app(pool: SqlitePool) -> Router {
     let api_routes = Router::<AppState>::new()
         .merge(notes::notes_routes())
         .merge(user::user_routes())
-        .merge(logs::log_routes());
+        .merge(logs::log_routes())
+        .merge(reminder_controller::reminder_routes());
 
     // Create a channel to pass log information to the db write task
     let (log_tx, log_rx) = mpsc::channel();

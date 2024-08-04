@@ -106,6 +106,7 @@ async fn auth_user(
     Json(credentials): Json<LoginUserSchema>,
 ) -> ReturnData<String, String> {
     let pool = &app_state.db;
+    // TODO: This should be moved into the db section
     match sqlx::query_as!(
         User,
         "SELECT * FROM users WHERE username = ?",
@@ -182,6 +183,7 @@ async fn create_user(
     .await;
 
     match db_get_user_by_username(pool, credentials.username.as_str()).await {
+        // TODO: This should probably return an auth token instead?
         Some(user) => ReturnData::created(Into::<ReturnUser>::into(user)),
         // TODO: Actual error handling here
         None => ReturnData::internal_error("Internal Error".to_owned()),
