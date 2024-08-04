@@ -2,6 +2,7 @@
 
 mod helpers;
 mod log_testing;
+mod reminder_testing;
 mod user_testing;
 
 use crate::generate_app;
@@ -47,8 +48,14 @@ impl TestHelper {
             "\
             DELETE FROM users;\
             DELETE FROM logs;\
+            DELETE FROM reminders;\
+            DELETE FROM reminderCategories;\
+            DELETE FROM categories;\
             UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'users';\
             UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'logs';\
+            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'reminders';\
+            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'reminderCategories';\
+            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'categories';\
             INSERT INTO users (username, password, auth_level, salt) VALUES ('admin', 'D600AD1AAEA6261F2B5923FE076AE08B42688CDF6051FEF2D8CC4ED303D19E22', 'Admin', 'zTGNpsiiXQ5f');\
             "
         ).execute(&self.pool).await;
