@@ -38,7 +38,6 @@ pub struct Category {
 
 #[derive(Serialize, Deserialize)]
 pub struct ReminderSchema {
-    slug: String,
     name: String,
     description: String,
     categories: Vec<i64>,
@@ -48,7 +47,6 @@ pub struct ReminderSchema {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Reminder {
     pub id: i64,
-    pub slug: String,
     pub name: String,
     pub description: String,
     pub categories: Vec<i64>,

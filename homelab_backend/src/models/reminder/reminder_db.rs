@@ -60,7 +60,6 @@ pub async fn get_category_by_slug(pool: &SqlitePool, slug: &str) -> Result<Categ
 #[derive(Deserialize)]
 struct IntermediaryReminder {
     id: i64,
-    slug: String,
     name: String,
     description: String,
     priority: Priority,
@@ -80,17 +79,13 @@ pub async fn insert_reminder(
     data: &ReminderSchema,
     user_id: i64,
 ) -> Result<Reminder, DbError> {
-    // TODO: If I end up using nosql, I need to make sure that the unique constraint for 'slug' is
-    //       preserved
-    let slug = data.slug.clone();
     let serialized_priority = data.priority as i64;
     let date_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
     match sqlx::query!(
-        "INSERT INTO reminders (slug, name, description, priority, user_id, date_time) VALUES (?, ?, ?, ?, ?, ?)",
-        data.slug,
+        "INSERT INTO reminders (name, description, priority, user_id, date_time) VALUES (?, ?, ?, ?, ?)",
         data.name,
         data.description,
         serialized_priority,
@@ -98,7 +93,7 @@ pub async fn insert_reminder(
         date_time
     ).execute(pool).await {
         Ok(_) => {
-            match sqlx::query_as!(IntermediaryReminder, r#"SELECT id as "id!", slug, name, description, priority, user_id, date_time FROM reminders WHERE slug = ?"#, slug)
+            match sqlx::query_as!(IntermediaryReminder, r#"SELECT id as "id!", name, description, priority, user_id, date_time FROM reminders ORDER BY id DESC"#)
                 .fetch_one(pool)
                 .await
             {
@@ -111,7 +106,7 @@ pub async fn insert_reminder(
                             category_id
                         ).execute(pool).await.expect("Unhandled exception inserting reminderCategories");
                     }
-                    get_reminder(pool, slug.as_str()).await
+                    get_reminder(pool,intermediary_reminder.id).await
                 },
                 Err(_) => Err(DbError::UnhandledException)
             }
@@ -119,7 +114,6 @@ pub async fn insert_reminder(
         Err(e) => match e {
             Error::Database(db_err) => {
                 match db_err.kind() {
-                    ErrorKind::UniqueViolation => Err(DbError::AlreadyExists("slug".to_owned(), slug)),
                     _ => Err(DbError::UnhandledException)
                 }
             },
@@ -128,27 +122,18 @@ pub async fn insert_reminder(
     }
 }
 
-pub async fn get_reminder(pool: &SqlitePool, slug: &str) -> Result<Reminder, DbError> {
-    // TODO: Reminders should not have `slug` as a unique constraint, if two users both make a reminder with
-    //       "foo" as a slug, the second users reminder will fail. This is bad behavior. The slug
-    //       should be removed, or the unique constraint should be for a unique combo of slug and user_id
-
+pub async fn get_reminder(pool: &SqlitePool, id: i64) -> Result<Reminder, DbError> {
     // TODO: I should be able to do this in a single query where the tables are joined, this is not efficient
-    match sqlx::query_as!(IntermediaryReminder, r#"SELECT id as "id!", slug, name, description, priority, user_id, date_time FROM reminders WHERE slug = ?"#, slug)
+    match sqlx::query_as!(IntermediaryReminder, r#"SELECT id as "id!", name, description, priority, user_id, date_time FROM reminders WHERE id = ?"#, id)
         .fetch_one(pool)
         .await {
         Ok(intermediary_reminder) => {
             match sqlx::query_as!(ReminderCategories, r#"SELECT reminder_id as "reminder_id!", category_id as "category_id!" FROM reminderCategories WHERE reminder_id = ?"#, intermediary_reminder.id)
                 .fetch_all(pool).await {
                 Ok(reminder_categories) => {
-                    // let mut categories: Vec<i64> = Vec::new();
-                    // for reminder_category in reminder_categories {
-                    //     categories.push(reminder_category.category_id)
-                    // };
                     let categories: Vec<i64> = reminder_categories.iter().map(|reminder_category| reminder_category.category_id).collect();
                     Ok(Reminder {
                         id: intermediary_reminder.id,
-                        slug: intermediary_reminder.slug,
                         name: intermediary_reminder.name,
                         description: intermediary_reminder.description,
                         categories,
@@ -163,7 +148,6 @@ pub async fn get_reminder(pool: &SqlitePool, slug: &str) -> Result<Reminder, DbE
         Err(e) => match e {
             Error::Database(db_err) => {
                 match db_err.kind() {
-                    ErrorKind::UniqueViolation => Err(DbError::AlreadyExists("slug".to_owned(), slug.to_owned())),
                     _ => Err(DbError::UnhandledException)
                 }
             },

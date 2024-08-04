@@ -65,13 +65,12 @@ mod reminder_testing {
         // TODO: Implement this check
 
         // Create a reminder
-        let reminder_slug = "test_reminder";
+        let reminder_name = "test_reminder";
         let reminder_categories = vec![created_category.id];
         let created_reminder = create_reminder(
             &helper.client,
             token.as_ref(),
-            reminder_slug,
-            reminder_slug,
+            reminder_name,
             "test_reminder",
             reminder_categories.clone(),
             Priority::Medium,
@@ -79,32 +78,10 @@ mod reminder_testing {
         )
         .await
         .expect("Failed to create a new reminder");
-        assert_eq!(created_reminder.slug.as_str(), reminder_slug);
-        assert_eq!(created_reminder.name.as_str(), reminder_slug);
+        assert_eq!(created_reminder.name.as_str(), reminder_name);
         assert_eq!(created_reminder.description.as_str(), "test_reminder");
         assert_eq!(created_reminder.categories, reminder_categories);
         assert_eq!(created_reminder.priority, Priority::Medium);
         assert_eq!(created_reminder.user_id, user.id);
-
-        // Try to create a reminder that already exists
-        match create_reminder(
-            &helper.client,
-            token.as_ref(),
-            reminder_slug,
-            reminder_slug,
-            "test_remidner",
-            vec![created_category.id],
-            Priority::Medium,
-            &helper.address,
-        )
-        .await
-        {
-            Ok(_) => panic!("Creating a reminder with a duplicate slug should fail"),
-            Err((status_code, _msg)) => assert_eq!(
-                status_code,
-                StatusCode::BAD_REQUEST,
-                "Creating a reminder with a duplicate slug should 400"
-            ),
-        };
     }
 }

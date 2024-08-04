@@ -36,7 +36,6 @@ pub async fn create_category(
 pub async fn create_reminder(
     client: &Client<HttpConnector, Body>,
     token: &str,
-    slug: &str,
     name: &str,
     description: &str,
     categories: Vec<i64>,
@@ -50,7 +49,7 @@ pub async fn create_reminder(
         .header("Content-Type", "application/json")
         .header("authorization", token)
         .body(Body::from(json_bytes(
-            json!({"slug": slug, "name": name, "description": description, "categories": categories, "priority": priority}),
+            json!({"name": name, "description": description, "categories": categories, "priority": priority}),
         )))
         .unwrap();
     let res = client.request(req).await.unwrap();
