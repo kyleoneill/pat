@@ -5,13 +5,16 @@ use super::get_user_from_token;
 use super::return_data::ReturnData;
 
 use crate::models::reminder::{
-    reminder_db::{insert_category, insert_reminder, get_categories_for_user, delete_category_by_id},
+    reminder_db::{insert_category, insert_reminder, get_categories_for_user, delete_category_by_id, get_reminders_for_user},
     Category, CategorySchema, Reminder, ReminderSchema,
 };
 
 pub fn reminder_routes() -> Router<AppState> {
     Router::<AppState>::new()
+        // Reminders
         .route("/reminders", post(create_reminder))
+        .route("/reminders", get(list_reminders))
+        // Categories
         .route("/reminders/category", post(create_category))
         .route("/reminders/category/all", get(get_categories))
         .route("/reminders/category/:category_id", delete(delete_category))
@@ -86,8 +89,24 @@ async fn create_reminder(
     }
 }
 
-// TODO: Get all reminders for a user, filterable
-//       ^ THIS SHOULD PAGINATE
+async fn list_reminders(
+    State(app_state): State<AppState>,
+    headers: HeaderMap
+    // TODO: QUERY SCHEMA
+) -> ReturnData<Vec<Reminder>, String> {
+    // TODO: Filter by category
+    //       Pagination
+    //       Sort
+    let pool = &app_state.db;
+    match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+        Ok(user) => match get_reminders_for_user(pool, user.get_id()).await {
+            Ok(reminders) => ReturnData::ok(reminders),
+            Err(db_err) => db_err.into(),
+        },
+        Err(e) => ReturnData::not_found(e),
+    }
+}
+
 // TODO: Get reminder by id/slug
 // TODO: Update reminder
 // TODO: Delete reminder

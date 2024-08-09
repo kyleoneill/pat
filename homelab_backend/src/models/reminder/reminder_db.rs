@@ -6,6 +6,23 @@ use sqlx::error::ErrorKind;
 use sqlx::{Error, SqlitePool};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[derive(Deserialize)]
+struct IntermediaryReminder {
+    id: i64,
+    name: String,
+    description: String,
+    priority: Priority,
+    user_id: i64,
+    date_time: i64,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct ReminderCategories {
+    reminder_id: i64,
+    category_id: i64,
+}
+
 // Categories
 pub async fn insert_category(
     pool: &SqlitePool,
@@ -73,6 +90,19 @@ pub async fn get_category_by_slug(pool: &SqlitePool, slug: &str) -> Result<Categ
 }
 
 pub async fn delete_category_by_id(pool:  &SqlitePool, category_id: i64, user_id: i64) -> Result<u64, DbError> {
+    // Verify that the category being deleted is not in use by a reminder
+    match sqlx::query!("SELECT COUNT(category_id) as count FROM reminderCategories WHERE category_id = ?", category_id)
+        .fetch_one(pool)
+        .await
+    {
+        Ok(res) => {
+            if res.count > 0 {
+                return Err(DbError::RelationshipViolation("category".to_owned(), category_id.to_string()))
+            }
+        },
+        Err(_e) => return Err(DbError::UnhandledException)
+    };
+
     match sqlx::query!("DELETE FROM categories WHERE id = ? AND user_id = ?", category_id, user_id)
         .execute(pool)
         .await
@@ -86,23 +116,6 @@ pub async fn delete_category_by_id(pool:  &SqlitePool, category_id: i64, user_id
 }
 
 // Reminders
-#[derive(Deserialize)]
-struct IntermediaryReminder {
-    id: i64,
-    name: String,
-    description: String,
-    priority: Priority,
-    user_id: i64,
-    date_time: i64,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize)]
-struct ReminderCategories {
-    reminder_id: i64,
-    category_id: i64,
-}
-
 pub async fn insert_reminder(
     pool: &SqlitePool,
     data: &ReminderSchema,
@@ -182,5 +195,60 @@ pub async fn get_reminder_by_id(pool: &SqlitePool, id: i64) -> Result<Reminder, 
             },
             _ => Err(DbError::UnhandledException)
         }
+    }
+}
+
+pub async fn get_reminders_for_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<Reminder>, DbError> {
+    match sqlx::query!(
+        r#"
+        SELECT
+            r.id,
+            r.name,
+            r.description,
+            r.priority,
+            r.user_id,
+            r.date_time,
+            COALESCE(rc.categories, '') AS categories
+        FROM
+            reminders r
+        LEFT JOIN
+            (
+                SELECT
+                    reminder_id, GROUP_CONCAT(category_id) AS categories
+                FROM
+                    reminderCategories
+                GROUP BY
+                    reminder_id
+            ) rc
+        ON
+            r.id = rc.reminder_id
+        WHERE
+            r.user_id = ?
+        "#,
+        user_id
+    )
+        .fetch_all(pool)
+        .await
+    {
+        Ok(res) => {
+            let mut reminders: Vec<Reminder> = Vec::new();
+            for row in res {
+                let categories: Vec<i64> = row.categories
+                    .split(",")
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                reminders.push(Reminder {
+                    id: row.id,
+                    name: row.name,
+                    description: row.description,
+                    categories,
+                    priority: row.priority.into(),
+                    user_id: row.user_id,
+                    date_time: row.date_time
+                });
+            }
+            Ok(reminders)
+        },
+        Err(_) => Err(DbError::UnhandledException)
     }
 }

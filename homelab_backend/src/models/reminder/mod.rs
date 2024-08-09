@@ -44,7 +44,7 @@ pub struct ReminderSchema {
     priority: Priority,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Reminder {
     pub id: i64,
     pub name: String,

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod reminder_testing {
     use crate::models::reminder::Priority;
-    use crate::testing::helpers::reminder_helpers::{create_category, create_reminder, get_categories, delete_category_by_id};
+    use crate::testing::helpers::reminder_helpers::{create_category, create_reminder, get_categories, delete_category_by_id, list_reminders};
     use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
     use crate::testing::TestHelper;
     use hyper::StatusCode;
@@ -30,27 +30,36 @@ mod reminder_testing {
             .await
             .unwrap();
 
-        // Create a category
-        let category_slug = "test_category";
+        // Create two categories
         let created_category = create_category(
             client,
             token.as_str(),
-            category_slug,
-            category_slug,
+            "test_category",
+            "test_category",
             addr,
         )
         .await
         .expect("Failed to create a new category");
 
+        let second_category = create_category(
+            client,
+            token.as_str(),
+            "second_category",
+            "second_category",
+            addr,
+        )
+            .await
+            .expect("Failed to create a second new category");
+
         // Try to create a reminder that points to a category that does not exist
         // TODO: Implement this check
 
-        // Create a reminder
+        // Create a reminder which has two IDs
         let reminder_name = "test_reminder";
-        let reminder_categories = vec![created_category.id];
+        let reminder_categories = vec![created_category.id, second_category.id];
         let created_reminder = create_reminder(
             client,
-            token.as_ref(),
+            token.as_str(),
             reminder_name,
             "test_reminder",
             reminder_categories.clone(),
@@ -61,9 +70,38 @@ mod reminder_testing {
         .expect("Failed to create a new reminder");
         assert_eq!(created_reminder.name.as_str(), reminder_name);
         assert_eq!(created_reminder.description.as_str(), "test_reminder");
-        assert_eq!(created_reminder.categories, reminder_categories);
+        assert_eq!(created_reminder.categories, reminder_categories.clone());
         assert_eq!(created_reminder.priority, Priority::Medium);
         assert_eq!(created_reminder.user_id, user.id);
+
+        // Try to delete a category used by a reminder
+        match delete_category_by_id(client, token.as_str(), addr, created_category.id).await {
+            Ok(_) => panic!("Should not be able to delete a category linked to a reminder"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::BAD_REQUEST,
+                "Trying to delete a category being used by a reminder should fail with a 400"
+            ),
+        };
+
+        // Create a second reminder
+        let second_reminder = create_reminder(
+            client,
+            token.as_str(),
+            "second_reminder",
+            "second test reminder",
+            reminder_categories.clone(),
+            Priority::Medium,
+            addr,
+        )
+            .await
+            .expect("Failed to create a second reminder");
+
+        // List all reminders
+        let reminders = list_reminders(client, addr, token.as_str()).await.expect("Failed to get a list of reminders");
+        assert_eq!(reminders.len(), 2);
+        assert_eq!(reminders[0], created_reminder);
+        assert_eq!(reminders[1], second_reminder);
     }
 
     #[tokio::test]
