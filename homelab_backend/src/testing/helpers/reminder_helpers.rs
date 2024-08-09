@@ -32,6 +32,51 @@ pub async fn create_category(
     Ok(serde_json::from_slice(body.as_ref()).unwrap())
 }
 
+pub async fn get_categories(
+    client: &Client<HttpConnector, Body>,
+    token: &str,
+    addr: &SocketAddr
+) -> Result<Vec<Category>, (StatusCode, String)> {
+    let req = Request::builder()
+        .uri(format!("http://{addr}/api/reminders/category/all"))
+        .method("GET")
+        .header("Host", "localhost")
+        .header("Content-Type", "application/json")
+        .header("authorization", token)
+        .body(Body::from(()))
+        .unwrap();
+    let res = client.request(req).await.unwrap();
+    match res.status() {
+        StatusCode::OK => (),
+        _ => return Err((res.status(), "Failed to get categories".to_owned())),
+    }
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+}
+
+pub async fn delete_category_by_id(
+    client: &Client<HttpConnector, Body>,
+    token: &str,
+    addr: &SocketAddr,
+    category_id: i64
+) -> Result<(), (StatusCode, String)> {
+    let req = Request::builder()
+        .uri(format!("http://{addr}/api/reminders/category/{category_id}"))
+        .method("DELETE")
+        .header("Host", "localhost")
+        .header("Content-Type", "application/json")
+        .header("authorization", token)
+        .body(Body::from(()))
+        .unwrap();
+    let res = client.request(req).await.unwrap();
+    match res.status() {
+        StatusCode::OK => (),
+        _ => return Err((res.status(), "Failed to delete category by id".to_owned())),
+    }
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn create_reminder(
     client: &Client<HttpConnector, Body>,

@@ -39,6 +39,22 @@ pub async fn insert_category(
     }
 }
 
+pub async fn get_categories_for_user(pool: &SqlitePool, user_id: i64) -> Result<Vec<Category>, DbError> {
+    match sqlx::query_as!(
+        Category,
+        r#"SELECT id as "id!", slug, name, user_id FROM categories WHERE user_id = ?"#,
+        user_id
+    )
+    .fetch_all(pool)
+    .await
+    {
+        Ok(categories) => Ok(categories),
+        Err(e) => match e {
+            _ => Err(DbError::UnhandledException)
+        }
+    }
+}
+
 pub async fn get_category_by_slug(pool: &SqlitePool, slug: &str) -> Result<Category, DbError> {
     match sqlx::query_as!(
         Category,
@@ -53,6 +69,19 @@ pub async fn get_category_by_slug(pool: &SqlitePool, slug: &str) -> Result<Categ
             Error::RowNotFound => Err(DbError::NotFound("category".to_owned(), slug.to_owned())),
             _ => Err(DbError::UnhandledException),
         },
+    }
+}
+
+pub async fn delete_category_by_id(pool:  &SqlitePool, category_id: i64, user_id: i64) -> Result<u64, DbError> {
+    match sqlx::query!("DELETE FROM categories WHERE id = ? AND user_id = ?", category_id, user_id)
+        .execute(pool)
+        .await
+    {
+        Ok(res) => Ok(res.rows_affected()),
+        Err(e) => match e {
+            Error::RowNotFound => Err(DbError::NotFound("category".to_owned(), category_id.to_string())),
+            _ => Err(DbError::UnhandledException)
+        }
     }
 }
 
@@ -106,7 +135,7 @@ pub async fn insert_reminder(
                             category_id
                         ).execute(pool).await.expect("Unhandled exception inserting reminderCategories");
                     }
-                    get_reminder(pool,intermediary_reminder.id).await
+                    get_reminder_by_id(pool,intermediary_reminder.id).await
                 },
                 Err(_) => Err(DbError::UnhandledException)
             }
@@ -122,7 +151,7 @@ pub async fn insert_reminder(
     }
 }
 
-pub async fn get_reminder(pool: &SqlitePool, id: i64) -> Result<Reminder, DbError> {
+pub async fn get_reminder_by_id(pool: &SqlitePool, id: i64) -> Result<Reminder, DbError> {
     // TODO: I should be able to do this in a single query where the tables are joined, this is not efficient
     match sqlx::query_as!(IntermediaryReminder, r#"SELECT id as "id!", name, description, priority, user_id, date_time FROM reminders WHERE id = ?"#, id)
         .fetch_one(pool)

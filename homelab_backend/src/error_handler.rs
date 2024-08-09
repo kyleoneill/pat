@@ -14,7 +14,7 @@ impl<T> From<DbError> for ReturnData<T, String> {
                 resource_type, resource
             )),
             DbError::NotFound(resource_type, resource_slug) => ReturnData::not_found(format!(
-                "{} with slug {} not found",
+                "{} with identifier {} not found",
                 resource_type, resource_slug
             )),
             DbError::UnhandledException => ReturnData::internal_error(
