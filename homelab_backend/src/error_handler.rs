@@ -5,6 +5,7 @@ pub enum DbError {
     NotFound(String, String),
     RelationshipViolation(String, String),
     UnhandledException,
+    EmptySQLExpression(String, String),
 }
 
 impl<T> From<DbError> for ReturnData<T, String> {
@@ -18,13 +19,33 @@ impl<T> From<DbError> for ReturnData<T, String> {
                 "{} with identifier {} not found",
                 resource_type, resource_slug
             )),
-            DbError::RelationshipViolation(resource_type, identifier) => ReturnData::bad_request(format!(
-                "The request violates a relationship constraint on {} with identifier {}",
-                resource_type, identifier
+            DbError::RelationshipViolation(resource_type, identifier) => {
+                ReturnData::bad_request(format!(
+                    "The request violates a relationship constraint on {} with identifier {}",
+                    resource_type, identifier
+                ))
+            }
+            DbError::EmptySQLExpression(operation, data_type) => ReturnData::bad_request(format!(
+                "Received no data while {} {}, resulting in a no-op",
+                operation, data_type
             )),
             DbError::UnhandledException => ReturnData::internal_error(
                 "Unhandled exception when making a database request".to_owned(),
             ),
+        }
+    }
+}
+
+pub enum InternalError {
+    FailedAuthentication,
+}
+
+impl<T> From<InternalError> for ReturnData<T, String> {
+    fn from(value: InternalError) -> Self {
+        match value {
+            InternalError::FailedAuthentication => {
+                ReturnData::unauthorized("Invalid authorization token".to_owned())
+            }
         }
     }
 }

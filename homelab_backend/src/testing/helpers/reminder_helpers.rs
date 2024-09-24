@@ -1,4 +1,4 @@
-use crate::models::reminder::{Category, Priority, Reminder};
+use crate::models::reminder::{Category, Priority, Reminder, ReminderUpdateSchema};
 use crate::testing::json_bytes;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -35,7 +35,7 @@ pub async fn create_category(
 pub async fn get_categories(
     client: &Client<HttpConnector, Body>,
     token: &str,
-    addr: &SocketAddr
+    addr: &SocketAddr,
 ) -> Result<Vec<Category>, (StatusCode, String)> {
     let req = Request::builder()
         .uri(format!("http://{addr}/api/reminders/category/all"))
@@ -58,10 +58,12 @@ pub async fn delete_category_by_id(
     client: &Client<HttpConnector, Body>,
     token: &str,
     addr: &SocketAddr,
-    category_id: i64
+    category_id: i64,
 ) -> Result<(), (StatusCode, String)> {
     let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders/category/{category_id}"))
+        .uri(format!(
+            "http://{addr}/api/reminders/category/{category_id}"
+        ))
         .method("DELETE")
         .header("Host", "localhost")
         .header("Content-Type", "application/json")
@@ -73,8 +75,9 @@ pub async fn delete_category_by_id(
         StatusCode::OK => (),
         _ => return Err((res.status(), "Failed to delete category by id".to_owned())),
     }
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+    let _body = res.into_body().collect().await.unwrap().to_bytes();
+    // serde_json::from_slice(body.as_ref()).unwrap();
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -109,7 +112,7 @@ pub async fn create_reminder(
 pub async fn list_reminders(
     client: &Client<HttpConnector, Body>,
     addr: &SocketAddr,
-    token: &str
+    token: &str,
 ) -> Result<Vec<Reminder>, (StatusCode, String)> {
     let req = Request::builder()
         .uri(format!("http://{addr}/api/reminders"))
@@ -126,4 +129,60 @@ pub async fn list_reminders(
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
     Ok(serde_json::from_slice(body.as_ref()).unwrap())
+}
+
+pub async fn update_reminder_helper(
+    client: &Client<HttpConnector, Body>,
+    addr: &SocketAddr,
+    token: &str,
+    reminder_id: i64,
+    reminder_updates: ReminderUpdateSchema,
+) -> Result<Reminder, (StatusCode, String)> {
+    let req = Request::builder()
+        .uri(format!("http://{addr}/api/reminders/{reminder_id}"))
+        .method("PUT")
+        .header("Host", "localhost")
+        .header("Content-Type", "application/json")
+        .header("authorization", token)
+        .body(Body::from(json_bytes(json!(reminder_updates))))
+        .unwrap();
+    let res = client.request(req).await.unwrap();
+    match res.status() {
+        StatusCode::OK => (),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = serde_json::from_slice(body.as_ref()).unwrap();
+            return Err((
+                status,
+                format!("Failed to update reminder with error '{message}'"),
+            ));
+        }
+    }
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+}
+
+pub async fn delete_reminder_helper(
+    client: &Client<HttpConnector, Body>,
+    addr: &SocketAddr,
+    token: &str,
+    reminder_id: i64,
+) -> Result<(), (StatusCode, String)> {
+    let req = Request::builder()
+        .uri(format!("http://{addr}/api/reminders/{reminder_id}"))
+        .method("DELETE")
+        .header("Host", "localhost")
+        .header("Content-Type", "application/json")
+        .header("authorization", token)
+        .body(Body::from(()))
+        .unwrap();
+    let res = client.request(req).await.unwrap();
+    match res.status() {
+        StatusCode::OK => (),
+        _ => return Err((res.status(), "Failed to delete reminder by id".to_owned())),
+    }
+    let _body = res.into_body().collect().await.unwrap().to_bytes();
+    // serde_json::from_slice(body.as_ref()).unwrap();
+    Ok(())
 }

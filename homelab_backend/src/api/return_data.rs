@@ -34,6 +34,13 @@ impl<T, E> ReturnData<T, E> {
         }
     }
 
+    pub fn unauthorized(error: E) -> Self {
+        Self {
+            status_code: StatusCode::UNAUTHORIZED,
+            data: Err(error),
+        }
+    }
+
     // Success
     pub fn ok(data: T) -> Self {
         Self {

@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum Priority {
-    Low,
-    Medium,
-    High,
-    VeryHigh,
+    Low = 0,
+    Medium = 1,
+    High = 2,
+    VeryHigh = 3,
 }
 
 impl From<i64> for Priority {
@@ -19,6 +19,12 @@ impl From<i64> for Priority {
             3 => Self::VeryHigh,
             _ => panic!("Got an invalid i64 when converting an i64 to a Priority"),
         }
+    }
+}
+
+impl From<Priority> for i64 {
+    fn from(value: Priority) -> Self {
+        value as i64
     }
 }
 
@@ -42,6 +48,14 @@ pub struct ReminderSchema {
     description: String,
     categories: Vec<i64>,
     priority: Priority,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ReminderUpdateSchema {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub categories: Option<Vec<i64>>,
+    pub priority: Option<Priority>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

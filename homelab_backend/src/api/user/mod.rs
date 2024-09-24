@@ -222,10 +222,12 @@ async fn get_user_me(
     State(app_state): State<AppState>,
     headers: HeaderMap,
 ) -> ReturnData<ReturnUser, String> {
-    match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
-        Ok(user) => ReturnData::ok(Into::<ReturnUser>::into(user)),
-        Err(e) => ReturnData::not_found(e),
-    }
+    let user =
+        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
+            Ok(user) => user,
+            Err(e) => return e.into(),
+        };
+    ReturnData::ok(Into::<ReturnUser>::into(user))
 }
 
 async fn delete_user_by_id(
