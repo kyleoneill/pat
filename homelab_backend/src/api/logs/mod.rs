@@ -44,6 +44,9 @@ async fn get_logs(
     State(app_state): State<AppState>,
     headers: HeaderMap,
 ) -> ReturnData<Vec<Log>, String> {
+    // TODO: This has the potential to return a lot of data. There should be a hard limit for logs
+    //       returned, and this endpoint should be paginated / sortable. Should have a query
+    //       param to specify how many logs are returned.
     // TODO: This should optionally return all logs if the requester provides a flag for "all logs" and is an admin
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {

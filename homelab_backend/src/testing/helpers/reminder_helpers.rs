@@ -113,9 +113,17 @@ pub async fn list_reminders(
     client: &Client<HttpConnector, Body>,
     addr: &SocketAddr,
     token: &str,
+    categories: Option<Vec<i64>>,
 ) -> Result<Vec<Reminder>, (StatusCode, String)> {
+    let built_uri = match categories {
+        Some(filter_categories) => {
+            let params = super::list_to_query_params("categories", filter_categories);
+            format!("http://{addr}/api/reminders?{params}")
+        }
+        None => format!("http://{addr}/api/reminders"),
+    };
     let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders"))
+        .uri(built_uri)
         .method("GET")
         .header("Host", "localhost")
         .header("Content-Type", "application/json")

@@ -51,7 +51,7 @@ mod reminder_testing {
         // Try to create a reminder that points to a category that does not exist
         // TODO: Implement this check
 
-        // Create a reminder which has two IDs
+        // Create a reminder which has two associated categories
         let reminder_name = "test_reminder";
         let reminder_categories = vec![created_category.id, second_category.id];
         let created_reminder = create_reminder(
@@ -81,13 +81,13 @@ mod reminder_testing {
             ),
         };
 
-        // Create a second reminder
+        // Create a second reminder which only uses the first category
         let second_reminder = create_reminder(
             client,
             token.as_str(),
             "second_reminder",
             "second test reminder",
-            reminder_categories.clone(),
+            vec![created_category.id],
             Priority::Medium,
             addr,
         )
@@ -95,12 +95,42 @@ mod reminder_testing {
         .expect("Failed to create a second reminder");
 
         // List all reminders
-        let reminders = list_reminders(client, addr, token.as_str())
+        let reminders = list_reminders(client, addr, token.as_str(), None)
             .await
             .expect("Failed to get a list of reminders");
         assert_eq!(reminders.len(), 2);
         assert_eq!(reminders[0], created_reminder);
         assert_eq!(reminders[1], second_reminder);
+
+        // List all reminders which use the first category
+        let list_filter_to_first_category = list_reminders(
+            client,
+            addr,
+            token.as_str(),
+            Some(vec![created_category.id]),
+        )
+        .await
+        .expect("Failed to get a list of reminders filtered to one category");
+        assert_eq!(list_filter_to_first_category.len(), 2);
+        assert_eq!(list_filter_to_first_category[0], created_reminder);
+        assert_eq!(list_filter_to_first_category[1], second_reminder);
+
+        // List all reminders which use the second category
+        let list_filter_to_second_category =
+            list_reminders(client, addr, token.as_str(), Some(vec![second_category.id]))
+                .await
+                .expect("Failed to get a list of reminders filtered to one category");
+        assert_eq!(list_filter_to_second_category.len(), 1);
+        assert_eq!(list_filter_to_second_category[0], created_reminder);
+
+        // List all reminders which use a category that doesn't exist
+        let list_filter_to_unused_category =
+            list_reminders(client, addr, token.as_str(), Some(vec![9999999]))
+                .await
+                .expect(
+                    "Failed to get a list of reminders filtered to a category that does not exist",
+                );
+        assert_eq!(list_filter_to_unused_category.len(), 0);
 
         // Try to update a reminder with no data, which should fail
         let bad_update_data = ReminderUpdateSchema {
@@ -168,7 +198,7 @@ mod reminder_testing {
             .expect("Failed to delete a reminder");
 
         // List reminders, there should only be one now
-        let reminders_again = list_reminders(client, addr, token.as_str())
+        let reminders_again = list_reminders(client, addr, token.as_str(), None)
             .await
             .expect("Failed to get a list of reminders");
         assert_eq!(reminders_again.len(), 1);

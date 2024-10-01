@@ -1,5 +1,6 @@
 use crate::api::return_data::ReturnData;
 
+#[derive(Debug)]
 pub enum DbError {
     AlreadyExists(String, String),
     NotFound(String, String),

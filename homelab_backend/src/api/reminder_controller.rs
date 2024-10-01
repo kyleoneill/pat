@@ -1,3 +1,5 @@
+use super::get_user_from_token;
+use super::return_data::ReturnData;
 use crate::AppState;
 use axum::{
     extract::{Path, State},
@@ -5,9 +7,8 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
-
-use super::get_user_from_token;
-use super::return_data::ReturnData;
+use axum_extra::extract::Query as ListQuery;
+use serde::Deserialize;
 
 use crate::models::reminder::{
     reminder_db::{
@@ -99,19 +100,24 @@ async fn create_reminder(
     }
 }
 
+#[derive(Deserialize, Debug)]
+struct ListRemindersQueryParams {
+    categories: Option<Vec<i64>>,
+}
+
 async fn list_reminders(
     State(app_state): State<AppState>,
-    headers: HeaderMap, // TODO: QUERY SCHEMA
+    headers: HeaderMap,
+    query_params: ListQuery<ListRemindersQueryParams>,
 ) -> ReturnData<Vec<Reminder>, String> {
-    // TODO: Filter by category
-    //       Pagination
+    // TODO: Pagination
     //       Sort
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
-    match get_reminders_for_user(pool, user.get_id()).await {
+    match get_reminders_for_user(pool, user.get_id(), query_params.categories.clone()).await {
         Ok(reminders) => ReturnData::ok(reminders),
         Err(db_err) => db_err.into(),
     }

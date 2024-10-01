@@ -205,7 +205,76 @@ pub async fn get_reminder_by_id(pool: &SqlitePool, id: i64) -> Result<Reminder, 
 pub async fn get_reminders_for_user(
     pool: &SqlitePool,
     user_id: i64,
+    maybe_categories: Option<Vec<i64>>,
 ) -> Result<Vec<Reminder>, DbError> {
+    // let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
+    //     r#"
+    //     SELECT
+    //         r.id,
+    //         r.name,
+    //         r.description,
+    //         r.priority,
+    //         r.user_id,
+    //         r.date_time,
+    //         COALESCE(rc.categories, '') AS categories
+    //     FROM
+    //         reminders r
+    //     LEFT JOIN
+    //         (
+    //             SELECT
+    //                 reminder_id, GROUP_CONCAT(category_id) AS categories
+    //             FROM
+    //                 reminderCategories
+    //     "#
+    // );
+    //
+    // // Filter by category ID
+    // match maybe_categories {
+    //     Some(category_ids) => {
+    //         query_builder.push(" WHERE category_id IN (");
+    //         let mut first = true;
+    //         for category_id in category_ids {
+    //             if first {
+    //                 first = false;
+    //             }
+    //             else {
+    //                 query_builder.push(", ");
+    //             }
+    //             query_builder.push_bind(category_id);
+    //         }
+    //         query_builder.push(")");
+    //     },
+    //     None => ()
+    // }
+    //
+    // query_builder.push(" GROUP BY reminder_id) rc ON r.id = rc.reminder_id WHERE r.user_id = ");
+    // query_builder.push_bind(user_id);
+    //
+    // let finalized_query = query_builder.build();
+    // match finalized_query.fetch_all(pool).await {
+    //     Ok(res) => {
+    //         let mut reminders: Vec<Reminder> = Vec::new();
+    //         for row in res {
+    //             let categories: Vec<i64> = row
+    //                 .get::<String, &str>("categories")
+    //                 .split(',')
+    //                 .filter_map(|s| s.parse().ok())
+    //                 .collect();
+    //             reminders.push(Reminder {
+    //                 id: row.get::<i64, &str>("id"),
+    //                 name: row.get::<String, &str>("name"),
+    //                 description: row.get::<String, &str>("description"),
+    //                 categories,
+    //                 priority: row.get::<i64, &str>("priority").into(),
+    //                 user_id: row.get::<i64, &str>("user_id"),
+    //                 date_time: row.get::<i64, &str>("date_time"),
+    //             });
+    //         }
+    //         Ok(reminders)
+    //     }
+    //     Err(_) => Err(DbError::UnhandledException),
+    // }
+
     match sqlx::query!(
         r#"
         SELECT
@@ -255,7 +324,23 @@ pub async fn get_reminders_for_user(
                     date_time: row.date_time,
                 });
             }
-            Ok(reminders)
+            match maybe_categories {
+                Some(filter_categories) => {
+                    // TODO: This is not efficient, at all. The commented out block above is a more efficient way to do this, but it returns incomplete data as the Reminder.categories field
+                    //       will only contain the IDs that are used in the filter, rather than all IDs on the record. This should be fixed
+                    let filtered: Vec<Reminder> = reminders
+                        .into_iter()
+                        .filter(|reminder| {
+                            reminder
+                                .categories
+                                .iter()
+                                .any(|item| filter_categories.contains(item))
+                        })
+                        .collect();
+                    Ok(filtered)
+                }
+                None => Ok(reminders),
+            }
         }
         Err(_) => Err(DbError::UnhandledException),
     }
