@@ -72,8 +72,8 @@ mod user_testing {
             Ok(_) => panic!("Deleting a user and then trying to get their account should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
-                StatusCode::NOT_FOUND,
-                "Getting a user that does not exist should result in a 404 status code"
+                StatusCode::UNAUTHORIZED,
+                "Getting a user that does not exist should result in a 401 status code"
             ),
         };
     }
