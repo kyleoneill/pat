@@ -8,9 +8,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 mod api;
 pub mod error_handler;
 mod models;
+mod tasks;
 mod testing;
 
-use api::{logs, notes, reminder_controller, user};
+use api::{log_controller, reminder_controller, user};
 
 use axum::{http::Request, routing::get, Router};
 
@@ -69,9 +70,8 @@ pub async fn generate_app(pool: SqlitePool) -> Router {
 
     // Define the API routes
     let api_routes = Router::<AppState>::new()
-        .merge(notes::notes_routes())
         .merge(user::user_routes())
-        .merge(logs::log_routes())
+        .merge(log_controller::log_routes())
         .merge(reminder_controller::reminder_routes());
 
     // Create a channel to pass log information to the db write task
@@ -89,7 +89,7 @@ pub async fn generate_app(pool: SqlitePool) -> Router {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs() as i64;
-            let new_task = logs::tasks::LogCreationTask::new(
+            let new_task = tasks::log_creation_task::LogCreationTask::new(
                 request.method().to_string(),
                 request.uri().to_string(),
                 user_id,

@@ -1,8 +1,7 @@
 use axum::http::header::HeaderMap;
 use sqlx::SqlitePool;
 
-pub mod logs;
-pub mod notes;
+pub mod log_controller;
 pub mod reminder_controller;
 pub mod return_data;
 pub mod user;

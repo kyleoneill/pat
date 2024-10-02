@@ -1,8 +1,7 @@
-mod db;
-pub mod tasks;
-
 use super::get_user_from_token;
 use super::return_data::ReturnData;
+use crate::models::log::log_db::{db_get_log_by_id, db_get_logs_for_user};
+use crate::models::log::Log;
 use crate::AppState;
 use axum::{
     extract::{Path, State},
@@ -10,29 +9,6 @@ use axum::{
     routing::get,
     Router,
 };
-use hyper::body::Bytes;
-use serde::{Deserialize, Serialize};
-
-#[allow(dead_code)]
-#[derive(Deserialize, Serialize, Debug)]
-pub struct Log {
-    id: i64,
-    pub method: String,
-    pub uri: String,
-    pub user_id: i64,
-    date_time: i64,
-}
-
-impl Log {
-    #[allow(dead_code)] // Used in test
-    pub fn from_bytes_to_vec(input: &Bytes) -> Vec<Self> {
-        serde_json::from_slice(input).unwrap()
-    }
-}
-
-// TODO: Should have a log retention policy/task which auto deletes old tasks.
-//       Tasks older than a configurable age will be auto deleted by a task.
-//       Might be fine without this for awhile with an app only being used by myself
 
 pub fn log_routes() -> Router<AppState> {
     Router::<AppState>::new()
@@ -53,7 +29,7 @@ async fn get_logs(
         Ok(user) => user,
         Err(e) => return e.into(),
     };
-    match db::db_get_logs_for_user(pool, user.get_id()).await {
+    match db_get_logs_for_user(pool, user.get_id()).await {
         Some(res) => ReturnData::ok(res),
         None => ReturnData::internal_error("Internal error while accessing database".to_string()),
     }
@@ -70,7 +46,7 @@ async fn get_log_by_id(
         Ok(user) => user,
         Err(e) => return e.into(),
     };
-    match db::db_get_log_by_id(&app_state.db, log_id).await {
+    match db_get_log_by_id(&app_state.db, log_id).await {
         Some(log) => ReturnData::ok(log),
         None => ReturnData::not_found("Log with given id was not found".to_string()),
     }
