@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod user_testing {
     use super::*;
-    use crate::api::user::ReturnUser;
+    use crate::models::user::ReturnUser;
     use crate::testing::helpers::user_helpers::{auth_user, get_user_me};
     use crate::testing::{json_bytes, TestHelper};
     use axum::{

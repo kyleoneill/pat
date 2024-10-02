@@ -1,4 +1,4 @@
-use crate::api::logs::Log;
+use crate::models::log::Log;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;

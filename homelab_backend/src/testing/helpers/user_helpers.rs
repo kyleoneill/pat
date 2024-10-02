@@ -1,4 +1,4 @@
-use crate::api::user::ReturnUser;
+use crate::models::user::ReturnUser;
 use crate::testing::json_bytes;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -13,7 +13,7 @@ pub async fn create_user(
     username: &str,
     password: &str,
     addr: &SocketAddr,
-) -> Result<(), String> {
+) -> Result<(), (StatusCode, String)> {
     let req = Request::builder()
         .uri(format!("http://{addr}/api/users"))
         .method("POST")
@@ -23,13 +23,18 @@ pub async fn create_user(
             json!({"username": username, "password": password}),
         )))
         .unwrap();
-    let res = client.request(req).await;
-    match res {
-        Ok(inner_res) => match inner_res.status() {
-            StatusCode::CREATED => Ok(()),
-            _ => Err("Failed to create a new user".to_string()),
-        },
-        Err(_) => Err("Failed to make a request to create a user".to_string()),
+    let res = client.request(req).await.unwrap();
+    match res.status() {
+        StatusCode::CREATED => Ok(()),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = serde_json::from_slice(body.as_ref()).unwrap();
+            Err((
+                status,
+                format!("Failed to create a user with error '{message}'"),
+            ))
+        }
     }
 }
 
