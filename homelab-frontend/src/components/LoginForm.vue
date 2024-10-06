@@ -67,7 +67,11 @@ function try_login() {
 
 <style scoped>
 .login {
-  margin-left: 40vw;
+  display: grid;
+  place-items: center;
+
+  margin-left: 45vw;
+  margin-top: 35vh;
 }
 
 h1 {
@@ -80,11 +84,5 @@ h1 {
 button {
   margin-top: 1rem;
   padding-inline: 1.25rem;
-}
-
-@media (min-width: 1024px) {
-  .login h1 {
-    text-align: left;
-  }
 }
 </style>
