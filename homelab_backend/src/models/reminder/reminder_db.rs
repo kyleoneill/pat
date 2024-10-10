@@ -120,6 +120,8 @@ pub async fn insert_reminder(
         .unwrap()
         .as_secs() as i64;
 
+    // TODO: Verify that all category IDs exist
+
     let reminder_collection: Collection<Document> = pool.collection("reminders");
     let doc = doc! {
         "name": data.name.clone(),

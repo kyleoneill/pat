@@ -38,9 +38,7 @@ pub struct AppState {
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    pub database_url: String,
     pub connection_string: String,
-    pub test_database_url: String,
     pub jwt_secret: String,
     pub jwt_max_age: i32,
     pub app_secret: String,
@@ -48,16 +46,12 @@ pub struct Config {
 
 impl Config {
     pub fn init() -> Self {
-        let database_url = dotenv!("DATABASE_URL").to_owned();
         let connection_string = dotenv!("CONNECTION_STRING").to_owned();
-        let test_database_url = dotenv!("TEST_DATABASE_URL").to_owned();
         let jwt_secret = dotenv!("JWT_SECRET").to_owned();
         let jwt_max_age = dotenv!("JWT_MAX_AGE").to_owned();
         let app_secret = dotenv!("APP_SECRET").to_owned();
         Self {
-            database_url,
             connection_string,
-            test_database_url,
             jwt_secret,
             jwt_max_age: jwt_max_age
                 .parse::<i32>()
