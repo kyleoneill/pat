@@ -1,11 +1,7 @@
 # PAT Backend
 
 ## Database
-To create a database and run migrations, use the following commands:
-```shell
-sqlx db create
-sqlx migrate run
-```
+Pat uses [MongoDB](https://www.mongodb.com/) running locally at the default port of 27017.
 
 ## Debugging
 Axum handler errors are sometimes overly generic and not helpful.
