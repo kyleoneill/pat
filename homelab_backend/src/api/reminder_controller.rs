@@ -65,7 +65,7 @@ async fn get_categories(
 async fn delete_category(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-    Path(category_id): Path<i64>,
+    Path(category_id): Path<String>,
 ) -> ReturnData<(), String> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
@@ -102,7 +102,7 @@ async fn create_reminder(
 
 #[derive(Deserialize, Debug)]
 struct ListRemindersQueryParams {
-    categories: Option<Vec<i64>>,
+    categories: Option<Vec<String>>,
 }
 
 async fn list_reminders(
@@ -128,7 +128,7 @@ async fn list_reminders(
 async fn update_reminder(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-    Path(reminder_id): Path<i64>,
+    Path(reminder_id): Path<String>,
     Json(update_data): Json<ReminderUpdateSchema>,
 ) -> ReturnData<Reminder, String> {
     let pool = &app_state.db;
@@ -145,7 +145,7 @@ async fn update_reminder(
 async fn delete_reminder(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-    Path(reminder_id): Path<i64>,
+    Path(reminder_id): Path<String>,
 ) -> ReturnData<(), String> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {

@@ -30,15 +30,15 @@ async fn get_logs(
         Err(e) => return e.into(),
     };
     match db_get_logs_for_user(pool, user.get_id()).await {
-        Some(res) => ReturnData::ok(res),
-        None => ReturnData::internal_error("Internal error while accessing database".to_string()),
+        Ok(res) => ReturnData::ok(res),
+        Err(e) => e.into(),
     }
 }
 
 async fn get_log_by_id(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-    Path(log_id): Path<i64>,
+    Path(log_id): Path<String>,
 ) -> ReturnData<Log, String> {
     let pool = &app_state.db;
     // Get the user here just to auth them, we don't actually need the user data
@@ -47,7 +47,7 @@ async fn get_log_by_id(
         Err(e) => return e.into(),
     };
     match db_get_log_by_id(&app_state.db, log_id).await {
-        Some(log) => ReturnData::ok(log),
-        None => ReturnData::not_found("Log with given id was not found".to_string()),
+        Ok(log) => ReturnData::ok(log),
+        Err(e) => e.into(),
     }
 }

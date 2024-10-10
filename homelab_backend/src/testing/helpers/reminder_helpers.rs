@@ -58,7 +58,7 @@ pub async fn delete_category_by_id(
     client: &Client<HttpConnector, Body>,
     token: &str,
     addr: &SocketAddr,
-    category_id: i64,
+    category_id: String,
 ) -> Result<(), (StatusCode, String)> {
     let req = Request::builder()
         .uri(format!(
@@ -86,7 +86,7 @@ pub async fn create_reminder(
     token: &str,
     name: &str,
     description: &str,
-    categories: Vec<i64>,
+    categories: Vec<String>,
     priority: Priority,
     addr: &SocketAddr,
 ) -> Result<Reminder, (StatusCode, String)> {
@@ -113,7 +113,7 @@ pub async fn list_reminders(
     client: &Client<HttpConnector, Body>,
     addr: &SocketAddr,
     token: &str,
-    categories: Option<Vec<i64>>,
+    categories: Option<Vec<String>>,
 ) -> Result<Vec<Reminder>, (StatusCode, String)> {
     let built_uri = match categories {
         Some(filter_categories) => {
@@ -143,7 +143,7 @@ pub async fn update_reminder_helper(
     client: &Client<HttpConnector, Body>,
     addr: &SocketAddr,
     token: &str,
-    reminder_id: i64,
+    reminder_id: String,
     reminder_updates: ReminderUpdateSchema,
 ) -> Result<Reminder, (StatusCode, String)> {
     let req = Request::builder()
@@ -175,7 +175,7 @@ pub async fn delete_reminder_helper(
     client: &Client<HttpConnector, Body>,
     addr: &SocketAddr,
     token: &str,
-    reminder_id: i64,
+    reminder_id: String,
 ) -> Result<(), (StatusCode, String)> {
     let req = Request::builder()
         .uri(format!("http://{addr}/api/reminders/{reminder_id}"))

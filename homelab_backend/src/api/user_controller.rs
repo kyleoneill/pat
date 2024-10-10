@@ -169,7 +169,7 @@ async fn get_user_me(
 async fn delete_user_by_id(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-    Path(user_id): Path<i64>,
+    Path(user_id): Path<String>,
 ) -> ReturnData<(), String> {
     // Get the JWT from the Authorization header and decode it
     let token_user_id =
@@ -202,9 +202,8 @@ async fn delete_user_by_id(
 
     // Delete the user
     match db_delete_user(&app_state.db, user.get_id()).await {
-        // TODO: Should check .rows_affected() on the return here and error if it is anything other than 1
         Ok(_) => ReturnData::ok(()),
-        Err(_) => ReturnData::internal_error("Failed to delete user".to_owned()),
+        Err(e) => e.into(),
     }
 }
 
@@ -221,8 +220,7 @@ async fn delete_user_me(
 
     // Delete the user
     match db_delete_user(&app_state.db, token_user_id).await {
-        // TODO: Should check .rows_affected() on the return here and error if it is anything other than 1
         Ok(_) => ReturnData::ok(()),
-        Err(_) => ReturnData::internal_error("Failed to delete user".to_owned()),
+        Err(e) => e.into(),
     }
 }

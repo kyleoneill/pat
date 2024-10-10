@@ -1,64 +1,67 @@
 use super::{AuthLevel, User};
 use crate::error_handler::DbError;
-use sqlx::{sqlite::SqliteQueryResult, Error, SqlitePool};
+use mongodb::bson::oid::ObjectId;
+use mongodb::bson::Bson;
+use mongodb::bson::{doc, Document};
+use mongodb::{Collection, Database};
 
 pub async fn db_create_user(
-    pool: &SqlitePool,
+    pool: &Database,
     username: String,
     hash: String,
     auth_level: AuthLevel,
     salt: String,
 ) -> Result<(), DbError> {
-    match sqlx::query!(
-        "INSERT INTO users (username, password, auth_level, salt) VALUES (?, ?, ?, ?)",
-        username,
-        hash,
-        auth_level,
-        salt
-    )
-    .execute(pool)
-    .await
-    {
+    let collection: Collection<Document> = pool.collection("users");
+    let doc = doc! {
+        "username": username,
+        "password": hash,
+        "auth_level": auth_level,
+        "salt": salt
+    };
+    match collection.insert_one(doc).await {
         Ok(_res) => Ok(()),
-        // TODO: Handle this
-        Err(_e) => Err(DbError::UnhandledException),
+        Err(e) => Err(e.into()),
     }
 }
 
-pub async fn db_get_user_by_username(pool: &SqlitePool, username: &str) -> Result<User, DbError> {
-    match sqlx::query_as!(User, "SELECT * FROM users WHERE username = ?", username)
-        .fetch_one(pool)
-        .await
-    {
-        Ok(user) => Ok(user),
-        Err(e) => match e {
-            Error::RowNotFound => Err(DbError::NotFound("user".to_owned(), username.to_owned())),
-            _ => Err(DbError::UnhandledException),
+pub async fn db_get_user_by_username(pool: &Database, username: &str) -> Result<User, DbError> {
+    let collection: Collection<User> = pool.collection("users");
+    let doc = doc! { "username": username };
+    match collection.find_one(doc).await {
+        Ok(maybe_record) => match maybe_record {
+            Some(user) => Ok(user),
+            None => Err(DbError::NotFound("user".to_owned(), username.to_owned())),
         },
+        Err(e) => Err(DbError::from(e)),
     }
 }
 
-pub async fn db_delete_user(pool: &SqlitePool, user_id: i64) -> Result<SqliteQueryResult, ()> {
-    match sqlx::query!("DELETE FROM users WHERE id = ?", user_id)
-        .execute(pool)
-        .await
-    {
-        // Should add actual error handling here, for now all we care about is whether or not
-        // the query succeeded or failed
-        Ok(res) => Ok(res),
-        Err(_) => Err(()),
+pub async fn db_delete_user(pool: &Database, user_id: String) -> Result<(), DbError> {
+    let collection: Collection<User> = pool.collection("users");
+    let bson_id: ObjectId = match user_id.parse() {
+        Ok(bson_id) => bson_id,
+        Err(_) => return Err(DbError::BadId),
+    };
+    let doc = doc! { "_id": Bson::ObjectId(bson_id) };
+    match collection.delete_one(doc).await {
+        Ok(_) => Ok(()),
+        Err(e) => Err(DbError::from(e)),
     }
 }
 
-pub async fn db_get_user_by_id(pool: &SqlitePool, id: i64) -> Result<User, DbError> {
-    match sqlx::query_as!(User, "SELECT * FROM users WHERE id = ?", id)
-        .fetch_one(pool)
-        .await
-    {
-        Ok(user) => Ok(user),
-        Err(e) => match e {
-            Error::RowNotFound => Err(DbError::NotFound("user".to_owned(), id.to_string())),
-            _ => Err(DbError::UnhandledException),
+pub async fn db_get_user_by_id(pool: &Database, id: String) -> Result<User, DbError> {
+    let collection: Collection<User> = pool.collection("users");
+    let bson_id: ObjectId = match id.parse() {
+        Ok(bson_id) => bson_id,
+        Err(_) => return Err(DbError::BadId),
+    };
+    let doc = doc! { "_id": Bson::ObjectId(bson_id) };
+    match collection.find_one(doc).await {
+        Ok(maybe_record) => match maybe_record {
+            Some(user) => Ok(user),
+            None => Err(DbError::NotFound("user".to_owned(), id.to_string())),
         },
+        Err(e) => Err(DbError::from(e)),
     }
 }

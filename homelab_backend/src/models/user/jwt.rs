@@ -11,7 +11,7 @@ struct Claims {
     sub: String,
 }
 
-pub fn encode_jwt(app_secret: &str, user_id: i64, jwt_lifetime: usize) -> String {
+pub fn encode_jwt(app_secret: &str, user_id: String, jwt_lifetime: usize) -> String {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("System time set to before UNIX_EPOCH")
@@ -20,7 +20,7 @@ pub fn encode_jwt(app_secret: &str, user_id: i64, jwt_lifetime: usize) -> String
     let claims = Claims {
         exp: expires_at,
         iat: now,
-        sub: user_id.to_string(),
+        sub: user_id,
     };
     // We are using the default Header algorithm so this should be infallible
     encode(
@@ -31,7 +31,7 @@ pub fn encode_jwt(app_secret: &str, user_id: i64, jwt_lifetime: usize) -> String
     .unwrap()
 }
 
-fn decode_jwt(web_token: &str, app_secret: &str) -> Result<i64, String> {
+fn decode_jwt(web_token: &str, app_secret: &str) -> Result<String, String> {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.set_required_spec_claims(&["exp", "iat", "sub"]);
     let claims = match decode::<Claims>(
@@ -51,13 +51,13 @@ fn decode_jwt(web_token: &str, app_secret: &str) -> Result<i64, String> {
             return Err(err_msg.to_string());
         }
     };
-    match claims.claims.sub.parse::<i64>() {
+    match claims.claims.sub.parse::<String>() {
         Ok(id) => Ok(id),
         Err(_) => Err("Failed to parse user ID from JWT".to_string()),
     }
 }
 
-pub fn get_and_decode_auth_token(headers: &HeaderMap, app_secret: &str) -> Result<i64, String> {
+pub fn get_and_decode_auth_token(headers: &HeaderMap, app_secret: &str) -> Result<String, String> {
     let token = match get_auth_token(headers) {
         Ok(t) => t,
         Err(e) => return Err(e),

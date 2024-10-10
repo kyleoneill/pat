@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate dotenv_codegen;
 
-use sqlx::sqlite::SqlitePool;
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod api;
+mod db;
 pub mod error_handler;
 mod models;
 mod tasks;
@@ -28,15 +28,18 @@ use tower_http::{
 
 use tracing::Span;
 
+use mongodb::Database;
+
 #[derive(Clone)]
 pub struct AppState {
-    pub db: SqlitePool,
+    pub db: Database,
     pub config: Config,
 }
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database_url: String,
+    pub connection_string: String,
     pub test_database_url: String,
     pub jwt_secret: String,
     pub jwt_max_age: i32,
@@ -46,12 +49,14 @@ pub struct Config {
 impl Config {
     pub fn init() -> Self {
         let database_url = dotenv!("DATABASE_URL").to_owned();
+        let connection_string = dotenv!("CONNECTION_STRING").to_owned();
         let test_database_url = dotenv!("TEST_DATABASE_URL").to_owned();
         let jwt_secret = dotenv!("JWT_SECRET").to_owned();
         let jwt_max_age = dotenv!("JWT_MAX_AGE").to_owned();
         let app_secret = dotenv!("APP_SECRET").to_owned();
         Self {
             database_url,
+            connection_string,
             test_database_url,
             jwt_secret,
             jwt_max_age: jwt_max_age
@@ -62,13 +67,13 @@ impl Config {
     }
 }
 
-pub async fn generate_app(pool: SqlitePool) -> Router {
+pub async fn generate_app(database: Database) -> Router {
     // Set up app config and the database pool
     let config = Config::init();
 
     // Copy the app secret and db handle as they are passed to tasks and on_request events
     let app_secret = config.app_secret.clone();
-    let handle = pool.clone();
+    let handle = database.clone();
 
     // Define the API routes
     let api_routes = Router::<AppState>::new()
@@ -84,8 +89,8 @@ pub async fn generate_app(pool: SqlitePool) -> Router {
         //.make_span_with(|request: &Request<_>| {})
         .on_request(move |request: &Request<_>, _span: &Span| {
             // If a request does not have an associated user id, mark it as -1
-            let user_id =
-                get_and_decode_auth_token(request.headers(), app_secret.as_str()).unwrap_or(-1);
+            let user_id = get_and_decode_auth_token(request.headers(), app_secret.as_str())
+                .unwrap_or("-1".to_string());
             let date_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -127,7 +132,10 @@ pub async fn generate_app(pool: SqlitePool) -> Router {
     });
 
     // Create app state and the router
-    let state = AppState { db: pool, config };
+    let state = AppState {
+        db: database,
+        config,
+    };
     Router::<AppState>::new()
         // `GET /` goes to `root`
         .route("/", get(root))
@@ -143,17 +151,15 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     // Set up database pool
-    let database_url = dotenv!("DATABASE_URL").to_owned();
-    let pool = SqlitePool::connect(database_url.as_str())
-        .await
-        .expect("Failed to connect to database");
+    let connection_string = dotenv!("CONNECTION_STRING").to_owned();
+    let database = db::initialize_database_handle(connection_string, "home_server_db").await;
 
     // run our app with hyper, listening on 127.0.0.1:3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
     println!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, generate_app(pool).await)
+    axum::serve(listener, generate_app(database).await)
         .await
         .unwrap();
 }

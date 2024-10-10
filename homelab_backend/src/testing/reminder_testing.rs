@@ -53,7 +53,7 @@ mod reminder_testing {
 
         // Create a reminder which has two associated categories
         let reminder_name = "test_reminder";
-        let reminder_categories = vec![created_category.id, second_category.id];
+        let reminder_categories = vec![created_category.id.clone(), second_category.id.clone()];
         let created_reminder = create_reminder(
             client,
             token.as_str(),
@@ -72,7 +72,8 @@ mod reminder_testing {
         assert_eq!(created_reminder.user_id, user.id);
 
         // Try to delete a category used by a reminder
-        match delete_category_by_id(client, token.as_str(), addr, created_category.id).await {
+        match delete_category_by_id(client, token.as_str(), addr, created_category.id.clone()).await
+        {
             Ok(_) => panic!("Should not be able to delete a category linked to a reminder"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -87,7 +88,7 @@ mod reminder_testing {
             token.as_str(),
             "second_reminder",
             "second test reminder",
-            vec![created_category.id],
+            vec![created_category.id.clone()],
             Priority::Medium,
             addr,
         )
@@ -107,7 +108,7 @@ mod reminder_testing {
             client,
             addr,
             token.as_str(),
-            Some(vec![created_category.id]),
+            Some(vec![created_category.id.clone()]),
         )
         .await
         .expect("Failed to get a list of reminders filtered to one category");
@@ -116,20 +117,26 @@ mod reminder_testing {
         assert_eq!(list_filter_to_first_category[1], second_reminder);
 
         // List all reminders which use the second category
-        let list_filter_to_second_category =
-            list_reminders(client, addr, token.as_str(), Some(vec![second_category.id]))
-                .await
-                .expect("Failed to get a list of reminders filtered to one category");
+        let list_filter_to_second_category = list_reminders(
+            client,
+            addr,
+            token.as_str(),
+            Some(vec![second_category.id.clone()]),
+        )
+        .await
+        .expect("Failed to get a list of reminders filtered to one category");
         assert_eq!(list_filter_to_second_category.len(), 1);
         assert_eq!(list_filter_to_second_category[0], created_reminder);
 
         // List all reminders which use a category that doesn't exist
-        let list_filter_to_unused_category =
-            list_reminders(client, addr, token.as_str(), Some(vec![9999999]))
-                .await
-                .expect(
-                    "Failed to get a list of reminders filtered to a category that does not exist",
-                );
+        let list_filter_to_unused_category = list_reminders(
+            client,
+            addr,
+            token.as_str(),
+            Some(vec!["aaaaaaaaaaaaaaaaaaaaaaaa".to_string()]),
+        )
+        .await
+        .expect("Failed to get a list of reminders filtered to a category that does not exist");
         assert_eq!(list_filter_to_unused_category.len(), 0);
 
         // Try to update a reminder with no data, which should fail
@@ -143,7 +150,7 @@ mod reminder_testing {
             client,
             addr,
             token.as_str(),
-            reminders[0].id,
+            reminders[0].id.clone(),
             bad_update_data,
         )
         .await
@@ -163,10 +170,15 @@ mod reminder_testing {
             categories: None,
             priority: None,
         };
-        let update_reminder_res =
-            update_reminder_helper(client, addr, token.as_str(), reminders[0].id, update_data)
-                .await
-                .expect("Failed to update a reminder");
+        let update_reminder_res = update_reminder_helper(
+            client,
+            addr,
+            token.as_str(),
+            reminders[0].id.clone(),
+            update_data,
+        )
+        .await
+        .expect("Failed to update a reminder");
         assert_eq!(update_reminder_res.name.as_str(), reminder_name);
         assert_eq!(
             update_reminder_res.description.as_str(),
@@ -177,23 +189,23 @@ mod reminder_testing {
         let multiple_updates = ReminderUpdateSchema {
             name: Some("new name".to_owned()),
             description: None,
-            categories: Some(vec![created_category.id]),
+            categories: Some(vec![created_category.id.clone()]),
             priority: None,
         };
         let second_update = update_reminder_helper(
             client,
             addr,
             token.as_str(),
-            reminders[0].id,
+            reminders[0].id.clone(),
             multiple_updates,
         )
         .await
         .expect("Failed to update a reminder");
-        assert_eq!(second_update.categories, vec![created_category.id]);
+        assert_eq!(second_update.categories, vec![created_category.id.clone()]);
         assert_eq!(second_update.name.as_str(), "new name");
 
         // Delete a reminder
-        delete_reminder_helper(client, addr, token.as_str(), reminders[0].id)
+        delete_reminder_helper(client, addr, token.as_str(), reminders[0].id.clone())
             .await
             .expect("Failed to delete a reminder");
 
@@ -263,12 +275,12 @@ mod reminder_testing {
         assert_eq!(categories[1].user_id, user.id);
 
         // Delete a category
-        delete_category_by_id(client, token.as_str(), addr, categories[1].id)
+        delete_category_by_id(client, token.as_str(), addr, categories[1].id.clone())
             .await
             .expect("Failed to delete category by id");
 
         // Try to delete a category that was already deleted
-        match delete_category_by_id(client, token.as_str(), addr, categories[1].id).await {
+        match delete_category_by_id(client, token.as_str(), addr, categories[1].id.clone()).await {
             Ok(_) => panic!("Deleting a category that does not exist should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
