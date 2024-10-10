@@ -1,0 +1,123 @@
+use crate::models::reminder::Category;
+use crate::models::user::user_db::db_create_user;
+use crate::models::user::{AuthLevel, User};
+use mongodb::error::ErrorKind;
+use mongodb::options::IndexOptions;
+use mongodb::{bson::doc, Client, Collection, Database, IndexModel};
+
+pub async fn initialize_database_handle(
+    connection_string: String,
+    database_name: &str,
+) -> Database {
+    let client = Client::with_uri_str(connection_string)
+        .await
+        .expect("Failed to connect to database");
+    let database = client.database(database_name);
+
+    check_indexes(&database).await;
+
+    // Check for admin, create if not here
+    let user_collection: Collection<User> = database.collection("users");
+    let user_filter = doc! {"username": "admin"};
+    let maybe_admin = user_collection
+        .find_one(user_filter)
+        .await
+        .expect("DB error during initialization when checking if the admin account exists");
+    if maybe_admin.is_none() {
+        let admin_password: String = dotenv!("ADMIN_PASSWORD_HASH").to_owned();
+        let salt: String = dotenv!("ADMIN_SALT").to_owned();
+        db_create_user(
+            &database,
+            "admin".to_owned(),
+            admin_password,
+            AuthLevel::Admin,
+            salt,
+        )
+        .await
+        .expect("DB error during initialization when creating an admin account");
+    }
+    database
+}
+
+pub async fn check_indexes(database: &Database) {
+    check_user_indexes(database).await;
+    check_category_indexes(database).await;
+}
+
+pub async fn check_user_indexes(database: &Database) {
+    let user_collection: Collection<User> = database.collection("users");
+
+    match user_collection.list_index_names().await {
+        Ok(user_indexes) => {
+            if !user_indexes.contains(&"username".to_owned()) {
+                create_user_indexes(user_collection).await;
+            }
+        },
+        Err(e) => {
+            match *e.kind {
+                ErrorKind::Command(command_error) => {
+                    match command_error.code {
+                        26 => create_user_indexes(user_collection).await,
+                        _ => panic!("Failed to list indexes for user collection with unknown error during db initialization")
+                    }
+                },
+                _ => panic!("Failed to list indexes for user collection with unknown error during db initialization")
+            }
+        }
+    }
+}
+
+pub async fn create_user_indexes(user_collection: Collection<User>) {
+    // Create an index for the username field, which should be unique
+    let user_index_options = IndexOptions::builder()
+        .unique(true)
+        .name(Some("username".to_owned()))
+        .build();
+    let username_index = IndexModel::builder()
+        .keys(doc! {"username": 1})
+        .options(user_index_options)
+        .build();
+    user_collection
+        .create_index(username_index)
+        .await
+        .expect("Failed to create a username index on the users collection");
+}
+
+pub async fn check_category_indexes(database: &Database) {
+    let category_collection: Collection<Category> = database.collection("categories");
+
+    match category_collection.list_index_names().await {
+        Ok(user_indexes) => {
+            if !user_indexes.contains(&"slug".to_owned()) {
+                create_category_indexes(category_collection).await;
+            }
+        },
+        Err(e) => {
+            match *e.kind {
+                ErrorKind::Command(command_error) => {
+                    match command_error.code {
+                        26 => create_category_indexes(category_collection).await,
+                        _ => panic!("Failed to list indexes for category collection with unknown error during db initialization")
+                    }
+                },
+                _ => panic!("Failed to list indexes for category collection with unknown error during db initialization")
+            }
+        }
+    }
+}
+
+pub async fn create_category_indexes(category_collection: Collection<Category>) {
+    // Create an index for the slug field, which should be unique
+    let category_index_options = IndexOptions::builder()
+        .unique(true)
+        .name(Some("slug".to_owned()))
+        .build();
+    let category_index = IndexModel::builder()
+        .keys(doc! {"slug": 1})
+        .options(category_index_options)
+        .build();
+    category_collection
+        .create_index(category_index)
+        .await
+        .expect("Failed to create a slug index on the categories collection");
+}

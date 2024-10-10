@@ -1,5 +1,5 @@
 use axum::http::header::HeaderMap;
-use sqlx::SqlitePool;
+use mongodb::Database;
 
 pub mod log_controller;
 pub mod reminder_controller;
@@ -14,7 +14,7 @@ use crate::models::user::User;
 // TODO: This should return an error struct that impls a response so it can be ?'d in an endpoint
 //       which would cause the endpoint to return a 403 like "Invalid authentication"
 pub async fn get_user_from_token(
-    pool: &SqlitePool,
+    pool: &Database,
     headers: &HeaderMap,
     app_secret: &str,
 ) -> Result<User, InternalError> {

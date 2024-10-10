@@ -5,31 +5,33 @@ mod log_testing;
 mod reminder_testing;
 mod user_testing;
 
-use crate::generate_app;
+use crate::models::log::Log;
+use crate::models::reminder::{Category, Reminder};
+use crate::models::user::User;
+use crate::{db, generate_app};
 use axum::body::Body;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use mongodb::bson::doc;
+use mongodb::{Collection, Database};
 use serde::Serialize;
-use sqlx::sqlite::SqlitePool;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 pub struct TestHelper {
     pub client: Client<HttpConnector, Body>,
     pub address: SocketAddr,
-    pub pool: SqlitePool,
+    pub database: Database,
 }
 
 impl TestHelper {
     pub async fn init() -> Self {
-        let database_url = dotenv!("TEST_DATABASE_URL").to_owned();
-        let pool = SqlitePool::connect(database_url.as_str())
-            .await
-            .expect("Failed to connect to database");
+        let connection_string = dotenv!("CONNECTION_STRING").to_owned();
+        let database = db::initialize_database_handle(connection_string, "test_db").await;
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let app = generate_app(pool.clone()).await;
+        let app = generate_app(database.clone()).await;
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         let client =
             hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
@@ -37,28 +39,24 @@ impl TestHelper {
         let helper = Self {
             client,
             address,
-            pool,
+            database,
         };
         helper.wipe_database().await;
         helper
     }
 
     pub async fn wipe_database(&self) {
-        let _ = sqlx::query!(
-            "\
-            DELETE FROM users;\
-            DELETE FROM logs;\
-            DELETE FROM reminders;\
-            DELETE FROM reminderCategories;\
-            DELETE FROM categories;\
-            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'users';\
-            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'logs';\
-            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'reminders';\
-            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'reminderCategories';\
-            UPDATE `main`.`sqlite_sequence` SET `seq` = '0' WHERE  `name` = 'categories';\
-            INSERT INTO users (username, password, auth_level, salt) VALUES ('admin', 'D600AD1AAEA6261F2B5923FE076AE08B42688CDF6051FEF2D8CC4ED303D19E22', 'Admin', 'zTGNpsiiXQ5f');\
-            "
-        ).execute(&self.pool).await;
+        let user_collection: Collection<User> = self.database.collection("users");
+        let _res = user_collection.delete_many(doc! {}).await;
+
+        let log_collection: Collection<Log> = self.database.collection("logs");
+        let _res = log_collection.delete_many(doc! {}).await;
+
+        let categories_collection: Collection<Category> = self.database.collection("categories");
+        let _res = categories_collection.delete_many(doc! {}).await;
+
+        let reminders_collection: Collection<Reminder> = self.database.collection("reminders");
+        let _res = reminders_collection.delete_many(doc! {}).await;
     }
 }
 

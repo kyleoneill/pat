@@ -1,14 +1,16 @@
 pub mod log_db;
 
+use super::deserialize_id;
 use hyper::body::Bytes;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Log {
-    id: i64,
+    #[serde(rename = "_id", deserialize_with = "deserialize_id")]
+    id: String,
     pub method: String,
     pub uri: String,
-    pub user_id: i64,
+    pub user_id: String,
     date_time: i64,
 }
 

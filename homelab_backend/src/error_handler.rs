@@ -1,4 +1,5 @@
 use crate::api::return_data::ReturnData;
+use mongodb::error;
 
 #[derive(Debug)]
 pub enum DbError {
@@ -6,7 +7,20 @@ pub enum DbError {
     NotFound(String, String),
     RelationshipViolation(String, String),
     UnhandledException,
-    EmptySQLExpression(String, String),
+    EmptyDbExpression(String, String),
+    BadId,
+    ExpressionFailed,
+}
+
+// Translate MongoDB errors into our error struct
+// TODO: Handle db errors
+impl From<error::Error> for DbError {
+    fn from(_value: error::Error) -> Self {
+        DbError::UnhandledException
+        // match *value.kind {
+        //     _ => DbError::UnhandledException,
+        // }
+    }
 }
 
 impl<T> From<DbError> for ReturnData<T, String> {
@@ -26,12 +40,17 @@ impl<T> From<DbError> for ReturnData<T, String> {
                     resource_type, identifier
                 ))
             }
-            DbError::EmptySQLExpression(operation, data_type) => ReturnData::bad_request(format!(
+            DbError::EmptyDbExpression(operation, data_type) => ReturnData::bad_request(format!(
                 "Received no data while {} {}, resulting in a no-op",
                 operation, data_type
             )),
             DbError::UnhandledException => ReturnData::internal_error(
                 "Unhandled exception when making a database request".to_owned(),
+            ),
+            DbError::BadId => ReturnData::bad_request("The provided ID was not valid".to_owned()),
+            // TODO: This error is ambiguous and should be made better
+            DbError::ExpressionFailed => ReturnData::internal_error(
+                "The specified database operation failed to produce the expected result".to_owned(),
             ),
         }
     }
