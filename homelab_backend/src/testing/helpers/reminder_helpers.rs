@@ -38,7 +38,7 @@ pub async fn get_categories(
     addr: &SocketAddr,
 ) -> Result<Vec<Category>, (StatusCode, String)> {
     let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders/category/all"))
+        .uri(format!("http://{addr}/api/reminders/category"))
         .method("GET")
         .header("Host", "localhost")
         .header("Content-Type", "application/json")

@@ -245,12 +245,7 @@ pub async fn db_delete_reminder(
     let doc = doc! {"_id": Bson::ObjectId(reminder_bson_id), "user_id": Bson::String(user_id)};
 
     match reminder_collection.delete_one(doc).await {
-        Ok(res) => {
-            if res.deleted_count != 1 {
-                return Err(DbError::ExpressionFailed);
-            }
-            Ok(res.deleted_count)
-        }
+        Ok(res) => Ok(res.deleted_count),
         Err(e) => Err(e.into()),
     }
 }

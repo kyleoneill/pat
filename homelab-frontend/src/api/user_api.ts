@@ -5,7 +5,7 @@ interface UserCredentials {
   password: string
 }
 
-export async function auth_user(username: string, password: string): Promise<AxiosResponse<any, any>> {
+export async function authUser(username: string, password: string): Promise<AxiosResponse<any, any>> {
   const data: UserCredentials = { username: username, password: password }
   return await axios.post("/users/auth", data)
 }

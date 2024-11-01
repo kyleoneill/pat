@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { auth_user } from '@/api/user_api'
+import { authUser } from '@/api/user_api'
 
 const username = ref('')
 const password = ref('')
@@ -29,16 +29,16 @@ function try_login() {
 
   // Try to log in
   loading.value = true
-  auth_user(username.value, password.value)
+  authUser(username.value, password.value)
     .then(response => {
-      loading.value = false
       localStorage.setItem("token", response.data)
       location.reload()
     }).catch(error => {
       // TODO: Verify that `error.response.status === 404`? What do we do if else?
       response_error.value = error.response.data
+    }).finally(() => {
       loading.value = false
-  })
+    })
 }
 </script>
 

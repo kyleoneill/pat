@@ -27,7 +27,7 @@ pub fn reminder_routes() -> Router<AppState> {
         .route("/reminders/:reminder_id", delete(delete_reminder))
         // Categories
         .route("/reminders/category", post(create_category))
-        .route("/reminders/category/all", get(get_categories))
+        .route("/reminders/category", get(get_categories))
         .route("/reminders/category/:category_id", delete(delete_category))
 }
 
@@ -153,7 +153,13 @@ async fn delete_reminder(
         Err(e) => return e.into(),
     };
     match db_delete_reminder(pool, reminder_id, user.get_id()).await {
-        Ok(_) => ReturnData::ok(()),
+        Ok(res) => match res {
+            0 => ReturnData::not_found(
+                "Could not find a reminder with the given id for the current user".to_owned(),
+            ),
+            1 => ReturnData::ok(()),
+            _ => ReturnData::internal_error("Unhandled exception while deleting data".to_owned()),
+        },
         Err(db_err) => db_err.into(),
     }
 }

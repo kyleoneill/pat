@@ -12,6 +12,7 @@ import Sidebar from "@/components/MainSidebar.vue"
 let maybe_token: string | null = localStorage.getItem("token")
 if (maybe_token != null) {
   global_state.set_token(maybe_token)
+  axios.defaults.headers.common["Authorization"] = maybe_token
 }
 </script>
 
@@ -36,8 +37,17 @@ if (maybe_token != null) {
   padding: 0 1rem;
 }
 
+.router-button {
+  background: var(--vt-c-text-light-1);
+  padding: 5px;
+  text-align: center;
+  border-radius: 5px;
+  color: var(--color-text);
+}
+
 main {
   min-width: 50rem;
+  margin-top: 2rem;
 }
 
 </style>
