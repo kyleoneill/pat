@@ -3,9 +3,9 @@ import { getAllReminderCategories, createReminder } from '@/api/reminders_api'
 import type { Ref } from 'vue'
 import { ref } from 'vue'
 
-import type { ReminderCategory } from '@/components/reminders/interfaces'
+import type { ReminderCategory } from '@/models/reminder_interfaces'
 
-import { Priority } from '@/components/reminders/interfaces'
+import { Priority } from '@/models/reminder_interfaces'
 
 import Toaster from "@/components/ToasterComponent.vue"
 import useToasterStore from '@/stores/useToasterStore'

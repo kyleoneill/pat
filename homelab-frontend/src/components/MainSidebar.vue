@@ -1,10 +1,5 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-
-function logout(): void {
-  localStorage.removeItem("token")
-  location.reload()
-}
 </script>
 
 <template>
@@ -13,7 +8,7 @@ function logout(): void {
       <ul>
         <li><RouterLink to="/">Home</RouterLink></li>
         <li><RouterLink to="/reminders">Reminders</RouterLink></li>
-        <li><a @click="logout">Logout</a></li>
+        <li><a @click="$emit('logout')">Logout</a></li>
       </ul>
     </nav>
   </div>

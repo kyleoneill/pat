@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { getAllReminders, getAllReminderCategories, deleteReminderById } from '@/api/reminders_api'
 import ReminderCards from '@/components/reminders/ReminderCards.vue'
-import type { Reminder, ReminderCategory } from '@/components/reminders/interfaces'
+import type { Reminder, ReminderCategory } from '@/models/reminder_interfaces'
 
 import Toaster from "@/components/ToasterComponent.vue"
 import useToasterStore from '@/stores/useToasterStore'
