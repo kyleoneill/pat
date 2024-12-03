@@ -33,17 +33,3 @@ export async function createReminder(name: string, description: string, categori
   const data: Reminder = { name: name, description: description, categories: categories, priority: priority }
   return await axios.post("/reminders", data)
 }
-
-// export async function auth_user(username: string, password: string): Promise<AxiosResponse<any, any>> {
-//   const data: UserCredentials = { username: username, password: password }
-//   return await axios.post("/users/auth", data)
-// }
-
-// pub fn reminder_routes() -> Router<AppState> {
-//   Router::<AppState>::new()
-//     // Reminders
-//     .route("/reminders/:reminder_id", put(update_reminder))
-//     .route("/reminders/:reminder_id", delete(delete_reminder))
-//     // Categories
-//     .route("/reminders/category/:category_id", delete(delete_category))
-// }

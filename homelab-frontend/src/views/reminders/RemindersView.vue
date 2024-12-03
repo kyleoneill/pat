@@ -6,6 +6,10 @@ import { getAllReminders, getAllReminderCategories, deleteReminderById } from '@
 import ReminderCards from '@/components/reminders/ReminderCards.vue'
 import type { Reminder, ReminderCategory } from '@/components/reminders/interfaces'
 
+import Toaster from "@/components/ToasterComponent.vue"
+import useToasterStore from '@/stores/useToasterStore'
+const toasterStore = useToasterStore();
+
 const loading = ref(true)
 const reminders: Ref<Map<string, Array<Reminder>>> = ref(new Map<string, Array<Reminder>>())
 const categories = ref(new Map<string, ReminderCategory>)
@@ -59,7 +63,7 @@ function fetch_reminder_categories() {
   })
 }
 
-function handleDeleteReminder(priority: string, reminderId: string) {
+function handleDeleteReminder(priority: string, reminderId: string, reminderName: string) {
   deleteReminderById(reminderId).then(res => {
     const reminderList = reminders.value.get(priority)
     if (reminderList !== undefined) {
@@ -71,7 +75,7 @@ function handleDeleteReminder(priority: string, reminderId: string) {
         reminders.value.set(priority, newReminders)
       }
     }
-    // TODO: Toast that the delete was successful
+    toasterStore.success({text: `Deleted reminder ${reminderName}`});
   }).catch(err => {
     // TODO
   })
@@ -85,6 +89,7 @@ loading.value = false
 </script>
 
 <template>
+  <Toaster />
   <div class="reminders">
     <div class="reminders-header">
       <RouterLink class="router-button" to="/reminders/new">Create Reminder</RouterLink>

@@ -16,7 +16,7 @@ defineEmits(['delete-reminder'])
 <template>
   <h2> {{props.priority}} </h2>
   <div class="card-grid">
-    <ReminderComponent v-for="reminder in props.reminders.get(slugifiedPriority)" :key="reminder._id" :reminder="reminder" @delete-reminder="$emit('delete-reminder', reminder.priority, reminder._id)" />
+    <ReminderComponent v-for="reminder in props.reminders.get(slugifiedPriority)" :key="reminder._id" :reminder="reminder" @delete-reminder="$emit('delete-reminder', reminder.priority, reminder._id, reminder.name)" />
   </div>
 </template>
 

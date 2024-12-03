@@ -1,10 +1,4 @@
 <script setup lang="ts">
-// name
-// description
-// categories (list, will need a dropdown or picker or something)
-//    - Will have to get categories and list them here
-//    - List by name, set by ID
-// priority (again, list with a picker or something)
 import { getAllReminderCategories, createReminder } from '@/api/reminders_api'
 import type { Ref } from 'vue'
 import { ref } from 'vue'
@@ -12,6 +6,10 @@ import { ref } from 'vue'
 import type { ReminderCategory } from '@/components/reminders/interfaces'
 
 import { Priority } from '@/components/reminders/interfaces'
+
+import Toaster from "@/components/ToasterComponent.vue"
+import useToasterStore from '@/stores/useToasterStore'
+const toasterStore = useToasterStore();
 
 const loading = ref(true)
 const categories: Ref<ReminderCategory[]> = ref([])
@@ -23,16 +21,16 @@ const priority = ref(Priority.Medium)
 
 function createNewReminder() {
   if (name.value === '' || description.value === '') {
-    // TODO: Error message here when I have a better way to render them
+    toasterStore.error({text: "Name and description must be filled out"});
     return
   }
   loading.value = true
   createReminder(name.value, description.value, reminderCategories.value, priority.value).then(response => {
+    toasterStore.success({text: `Created new reminder with name ${name.value}`});
     name.value = ''
     description.value = ''
     reminderCategories.value = []
     priority.value = Priority.Medium
-    // TODO: Make a toast or something
   }).catch(error => {
     // TODO
   }).finally(() => {
@@ -53,6 +51,7 @@ loading.value = false
 </script>
 
 <template>
+  <Toaster />
   <h1>Create Reminder</h1>
   <div class="input-section">
     <p>Name:</p>
