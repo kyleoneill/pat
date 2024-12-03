@@ -6,6 +6,9 @@
 
 *.exe
 
+# Node ignores
+package-lock.json
+
 ### Rust ignores
 # will have compiled files and executables
 debug/
