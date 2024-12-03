@@ -105,7 +105,14 @@ pub async fn generate_app(database: Database) -> Router {
     // Set up middleware, currently a timeout and CORS config
     let middleware = ServiceBuilder::new()
         .layer(TimeoutLayer::new(Duration::from_secs(30)))
-        .layer(CorsLayer::new().allow_origin(Any).allow_headers(Any))
+        // TODO: Getting a cross origin warning on the frontend that allow_headers(Any) will not be supported "soon".
+        //       Will need to explicitly list headers that are allowed, like Authorization
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_headers(Any)
+                .allow_methods(Any),
+        )
         //.layer(ValidateRequestHeaderLayer::accept("application/json"))
         .compression();
 

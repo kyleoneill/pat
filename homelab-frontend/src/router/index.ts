@@ -10,12 +10,23 @@ const router = createRouter({
       component: HomeView
     },
     {
-      path: '/about',
-      name: 'about',
+      path: '/reminders',
+      name: 'reminders',
       // route level code-splitting
       // this generates a separate chunk (About.[hash].js) for this route
       // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/reminders/RemindersView.vue')
+    },
+    // TODO: Can I break routing into multiple files and keep the "reminders" routes in the reminders folder?
+    {
+      path: '/reminders/new',
+      name: 'create-reminder',
+      component: () => import('../views/reminders/CreateReminderView.vue')
+    },
+    {
+      path: '/reminders/category/new',
+      name: 'create-reminder-category',
+      component: () => import('../views/reminders/CreateReminderCategoryView.vue')
     }
   ]
 })
