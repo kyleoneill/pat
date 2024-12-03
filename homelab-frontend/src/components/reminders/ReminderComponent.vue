@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Reminder } from '@/components/reminders/interfaces'
+import type { Reminder } from '@/models/reminder_interfaces'
 
 const props = defineProps<{
   reminder: Reminder
