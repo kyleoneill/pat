@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-import type { Reminder } from '@/components/reminders/interfaces'
+import type { Reminder } from '@/models/reminder_interfaces'
 import ReminderComponent from '@/components/reminders/ReminderComponent.vue'
 
 const props = defineProps<{
