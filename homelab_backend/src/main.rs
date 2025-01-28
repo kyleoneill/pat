@@ -13,7 +13,7 @@ mod testing;
 
 use models::user::jwt::get_and_decode_auth_token;
 
-use api::{log_controller, reminder_controller, user_controller};
+use api::{games_controller, log_controller, reminder_controller, user_controller};
 
 use axum::{http::Request, routing::get, Router};
 
@@ -73,7 +73,8 @@ pub async fn generate_app(database: Database) -> Router {
     let api_routes = Router::<AppState>::new()
         .merge(user_controller::user_routes())
         .merge(log_controller::log_routes())
-        .merge(reminder_controller::reminder_routes());
+        .merge(reminder_controller::reminder_routes())
+        .merge(games_controller::games_routes());
 
     // Create a channel to pass log information to the db write task
     let (log_tx, log_rx) = mpsc::channel();
