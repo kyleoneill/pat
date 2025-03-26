@@ -91,7 +91,7 @@ loading.value = false
 <template>
   <Toaster />
   <div class="reminders">
-    <div class="reminders-header">
+    <div class="section-header">
       <RouterLink class="router-button" to="/reminders/new">Create Reminder</RouterLink>
       <RouterLink class="router-button" to="/reminders/category/new">Create Category</RouterLink>
     </div>
@@ -113,14 +113,6 @@ loading.value = false
 </template>
 
 <style scoped>
-
-.reminders-header a {
-  margin-right: 1rem;
-}
-
-.reminders-header {
-  margin-bottom: 1.5rem;
-}
 
 .reminder-cards {
   margin-bottom: 1rem;

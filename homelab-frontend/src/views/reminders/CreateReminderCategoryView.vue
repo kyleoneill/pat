@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref } from 'vue';
 
-import { createReminderCategory } from '@/api/reminders_api'
+import { createReminderCategory } from '@/api/reminders_api';
 
-const slug = ref('')
-const name = ref('')
+const slug = ref('');
+const name = ref('');
 
-const loading = ref(false)
+const loading = ref(false);
 
-function create_new_category() {
+function createNewCategory() {
   if (slug.value === '' || name.value === '') {
     // TODO: Error message here when I have a better way to render them
     return
@@ -26,7 +26,7 @@ function create_new_category() {
 </script>
 
 <template>
-  <h1>Create Reminder Category</h1>
+  <h2>Create Reminder Category</h2>
   <div class="input-section">
     <p>Slug:</p>
     <input v-model="slug" />
@@ -35,15 +35,11 @@ function create_new_category() {
     <p>Name:</p>
     <input v-model="name" />
   </div>
-  <button :disabled="loading === true" @click="create_new_category">Create Category</button>
+  <button :disabled="loading === true" @click="createNewCategory">Create Category</button>
 </template>
 
 <style scoped>
 button {
   padding-inline: 1rem;
-}
-
-.input-section {
-  margin-bottom: 1rem;
 }
 </style>

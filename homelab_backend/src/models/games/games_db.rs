@@ -9,7 +9,6 @@ use mongodb::{
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
-// Collection is named 'game_connections'
 pub async fn insert_connections_game(
     pool: &Database,
     data: &ConnectionGameSchema,

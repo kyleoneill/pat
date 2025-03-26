@@ -56,6 +56,17 @@ if (maybe_token != null) {
   padding: 0 1rem;
 }
 
+.section-header {
+  margin-bottom: 1.5rem;
+}
+.section-header a {
+  margin-right: 1rem;
+}
+
+.input-section {
+  margin-bottom: 1rem;
+}
+
 .router-button {
   background: var(--vt-c-text-light-1);
   padding: 5px;

@@ -8,6 +8,7 @@ import { RouterLink } from 'vue-router'
       <ul>
         <li><RouterLink to="/">Home</RouterLink></li>
         <li><RouterLink to="/reminders">Reminders</RouterLink></li>
+        <li><RouterLink to="/games/connections">Connections</RouterLink></li>
         <li><a @click="$emit('logout')">Logout</a></li>
       </ul>
     </nav>
@@ -18,6 +19,11 @@ import { RouterLink } from 'vue-router'
 .sidebar {
   line-height: 1.5;
   margin-right: 2rem;
+
+  padding-right: 1rem;
+  border-right-color: var(--vt-c-text-light-2);
+  border-right-style: solid;
+  border-right-width: thin;
 }
 
 nav {

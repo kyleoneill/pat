@@ -1,13 +1,13 @@
 <script setup lang="ts">
 
-import type { Reminder } from '@/models/reminder_interfaces'
-import ReminderComponent from '@/components/reminders/ReminderComponent.vue'
+import type { Reminder } from '@/models/reminder_interfaces';
+import ReminderComponent from '@/components/reminders/ReminderComponent.vue';
 
 const props = defineProps<{
   priority: string,
   reminders: Map<string, Array<Reminder>>
-}>()
-const slugifiedPriority = props.priority.replace(" ", "")
+}>();
+const slugifiedPriority = props.priority.replace(" ", "");
 
 defineEmits(['delete-reminder'])
 
