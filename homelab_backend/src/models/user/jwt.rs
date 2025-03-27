@@ -58,10 +58,7 @@ fn decode_jwt(web_token: &str, app_secret: &str) -> Result<String, String> {
 }
 
 pub fn get_and_decode_auth_token(headers: &HeaderMap, app_secret: &str) -> Result<String, String> {
-    let token = match get_auth_token(headers) {
-        Ok(t) => t,
-        Err(e) => return Err(e),
-    };
+    let token = get_auth_token(headers)?;
     decode_jwt(token, app_secret)
 }
 

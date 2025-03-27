@@ -15,8 +15,11 @@ use models::user::jwt::get_and_decode_auth_token;
 
 use api::{games_controller, log_controller, reminder_controller, user_controller};
 
+use axum::http::header::{
+    ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONNECTION, CONTENT_TYPE, DNT, HOST,
+    ORIGIN, REFERER, USER_AGENT,
+};
 use axum::{http::Request, routing::get, Router};
-
 use tokio::{task, time};
 use tower::ServiceBuilder;
 use tower_http::{
@@ -111,7 +114,19 @@ pub async fn generate_app(database: Database) -> Router {
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
-                .allow_headers(Any)
+                .allow_headers([
+                    AUTHORIZATION,
+                    ACCEPT,
+                    ACCEPT_ENCODING,
+                    ACCEPT_LANGUAGE,
+                    CONNECTION,
+                    DNT,
+                    HOST,
+                    ORIGIN,
+                    REFERER,
+                    USER_AGENT,
+                    CONTENT_TYPE,
+                ])
                 .allow_methods(Any),
         )
         //.layer(ValidateRequestHeaderLayer::accept("application/json"))

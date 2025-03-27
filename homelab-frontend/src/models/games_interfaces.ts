@@ -42,3 +42,20 @@ export class CreateConnectionsGame {
     return true;
   }
 }
+
+export interface ListedConnectionGame {
+  author_id: string,
+  creation_datetime: number,
+  id: string,
+  puzzle_name: string,
+  slug: string,
+}
+
+export interface ScrambledGame {
+  author_id: string,
+  creation_datetime: number,
+  id: string,
+  puzzle_name: string,
+  scrambled_clues: Array<string>,
+  slug: string,
+}

@@ -9,4 +9,9 @@ export default [
     name: 'create-connections-games',
     component: () => import('../views/games/CreateConnectionsGame.vue')
   },
+  {
+    path: '/games/connections/play/:gameSlug',
+    name: 'play-connection-game',
+    component: () => import('../views/games/PlayConnectionsGameView.vue')
+  },
 ]
