@@ -13,7 +13,7 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
@@ -28,7 +28,7 @@ pub fn hash_password(mut password: String, salt: &str) -> String {
 }
 
 pub fn generate_salt() -> String {
-    rand::thread_rng()
+    rand::rng()
         .sample_iter(&Alphanumeric)
         .take(SALT_LENGTH)
         .map(char::from)

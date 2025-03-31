@@ -1,6 +1,7 @@
 pub mod games_db;
 
 use mongodb::bson::{doc, Document};
+use rand::seq::SliceRandom;
 
 use super::deserialize_id;
 use serde::{Deserialize, Serialize};
@@ -73,10 +74,8 @@ impl From<ConnectionGame> for PlayConnectionGame {
             .collect::<Vec<String>>()
             .try_into()
             .expect("Failed to convert ");
-        // TODO: Might want a better (true random) sort. This is making a lexicographical sort,
-        //       which is alphabetic sorting of each string and then its length. Could be biased
-        //       depending on what the user category is
-        scrambled_clues.sort();
+        let mut rng = rand::rng();
+        scrambled_clues.shuffle(&mut rng);
         Self {
             id: value.id,
             author_id: value.author_id,

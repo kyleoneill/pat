@@ -16,7 +16,7 @@ tower-http = { version = "0.5.1", features = ["full", "util"] }
 tracing-subscriber = "0.3.18"
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
-rand = "0.8.5"
+rand = "0.9"
 sha2 = "0.10.8"
 jsonwebtoken = "9.3.0"
 hyper = { version = "1.0.0", features = ["full"] }
