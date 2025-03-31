@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
+mod games_testing;
 mod helpers;
 mod log_testing;
 mod reminder_testing;
 mod user_testing;
 
+use crate::models::games::ConnectionGame;
 use crate::models::log::Log;
 use crate::models::reminder::{Category, Reminder};
 use crate::models::user::User;
@@ -46,6 +48,8 @@ impl TestHelper {
     }
 
     pub async fn wipe_database(&self) {
+        // TODO: This is not sustainable, what if 100 collections are added?
+
         let user_collection: Collection<User> = self.database.collection("users");
         let _res = user_collection.delete_many(doc! {}).await;
 
@@ -57,6 +61,10 @@ impl TestHelper {
 
         let reminders_collection: Collection<Reminder> = self.database.collection("reminders");
         let _res = reminders_collection.delete_many(doc! {}).await;
+
+        let games_collection: Collection<ConnectionGame> =
+            self.database.collection("game_connections");
+        let _res = games_collection.delete_many(doc! {}).await;
     }
 }
 

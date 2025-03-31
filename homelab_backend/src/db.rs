@@ -1,3 +1,4 @@
+use crate::models::games::ConnectionGame;
 use crate::models::reminder::Category;
 use crate::models::user::user_db::db_create_user;
 use crate::models::user::{AuthLevel, User};
@@ -40,8 +41,10 @@ pub async fn initialize_database_handle(
 }
 
 pub async fn check_indexes(database: &Database) {
+    // TODO: This is also not too sustainable, is there a better way to create indexes?
     check_user_indexes(database).await;
     check_category_indexes(database).await;
+    check_connections_game_indexes(database).await;
 }
 
 pub async fn check_user_indexes(database: &Database) {
@@ -120,4 +123,49 @@ pub async fn create_category_indexes(category_collection: Collection<Category>) 
         .create_index(category_index)
         .await
         .expect("Failed to create a slug index on the categories collection");
+}
+
+pub async fn check_connections_game_indexes(database: &Database) {
+    let game_connections_collection: Collection<ConnectionGame> =
+        database.collection("game_connections");
+
+    match game_connections_collection.list_index_names().await {
+        Ok(indexes) => {
+            if !indexes.contains(&"slug".to_owned()) {
+                create_connections_game_indexes(game_connections_collection).await;
+            }
+        },
+        Err(e) => {
+            match *e.kind {
+                ErrorKind::Command(command_error) => {
+                    match command_error.code {
+                        26 => create_connections_game_indexes(game_connections_collection).await,
+                        _ => panic!("Failed to list indexes for connections game collection with unknown error during db initialization")
+                    }
+                },
+                _ => panic!("Failed to list indexes for connections game collection with unknown error during db initialization")
+            }
+        }
+    }
+}
+
+pub async fn create_connections_game_indexes(
+    game_connections_collection: Collection<ConnectionGame>,
+) {
+    // Create an index for the slug field, which should be unique
+    // TODO: Currently user A making a puzzle with slug "foo" prevents user B from making a puzzle
+    //       with the same name. This should probably be a user_id/slug composite index.
+    //       Will need to delete the index I have locally when I change this
+    let category_index_options = IndexOptions::builder()
+        .unique(true)
+        .name(Some("slug".to_owned()))
+        .build();
+    let category_index = IndexModel::builder()
+        .keys(doc! {"slug": 1})
+        .options(category_index_options)
+        .build();
+    game_connections_collection
+        .create_index(category_index)
+        .await
+        .expect("Failed to create a slug index on the connections game collection");
 }

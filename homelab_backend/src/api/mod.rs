@@ -1,6 +1,7 @@
 use axum::http::header::HeaderMap;
 use mongodb::Database;
 
+pub mod games_controller;
 pub mod log_controller;
 pub mod reminder_controller;
 pub mod return_data;

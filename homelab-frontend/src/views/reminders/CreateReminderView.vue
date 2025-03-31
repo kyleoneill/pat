@@ -52,7 +52,7 @@ loading.value = false
 
 <template>
   <Toaster />
-  <h1>Create Reminder</h1>
+  <h2>Create Reminder</h2>
   <div class="input-section">
     <p>Name:</p>
     <input v-model="name" />
@@ -100,9 +100,5 @@ loading.value = false
 
 button {
   padding-inline: 1rem;
-}
-
-.input-section {
-  margin-bottom: 1rem;
 }
 </style>

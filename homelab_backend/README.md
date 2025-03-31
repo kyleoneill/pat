@@ -17,3 +17,10 @@ Testing currently must be done on a single thread until I better figure out how 
 ```shell
 cargo test -- --test-threads 1
 ```
+
+## Development
+Before any PR is made, make sure the following:
+```shell
+cargo fmt
+cargo clippy
+```

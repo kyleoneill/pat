@@ -8,15 +8,7 @@ use mongodb::{
     bson::{doc, Document},
     Collection, Database,
 };
-use serde::Deserialize;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-#[allow(dead_code)]
-#[derive(Deserialize)]
-struct ReminderCategories {
-    reminder_id: i64,
-    category_id: i64,
-}
 
 // Categories
 pub async fn insert_category(
