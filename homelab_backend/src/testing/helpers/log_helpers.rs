@@ -1,4 +1,5 @@
 use crate::models::log::Log;
+use crate::testing::helpers::read_error_message;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
@@ -23,10 +24,10 @@ pub async fn get_logs_for_user(
     match res.status() {
         StatusCode::OK => (),
         _ => {
-            return Err((
-                res.status(),
-                format!("Failed to get logs using token {}", token),
-            ))
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
         }
     };
     let body = res.into_body().collect().await.unwrap().to_bytes();

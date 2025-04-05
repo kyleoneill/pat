@@ -1,4 +1,5 @@
 use super::Log;
+use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use futures::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
@@ -14,7 +15,7 @@ pub async fn db_get_logs_for_user(pool: &Database, user_id: String) -> Result<Ve
             Ok(res) => Ok(res),
             Err(e) => Err(e.into()),
         },
-        Err(e) => Err(DbError::from(e)),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -29,10 +30,10 @@ pub async fn db_get_log_by_id(pool: &Database, log_id: String) -> Result<Log, Db
         Ok(maybe_doc) => match maybe_doc {
             Some(log) => Ok(log),
             None => Err(DbError::NotFound(
-                "log".to_owned(),
+                ResourceKind::Log,
                 log_id.to_owned().to_string(),
             )),
         },
-        Err(e) => Err(DbError::from(e)),
+        Err(e) => Err(e.into()),
     }
 }

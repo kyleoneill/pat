@@ -1,4 +1,5 @@
 use super::{ConnectionGame, ConnectionGameSchema};
+use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use crate::models::name_to_slug;
 use futures::TryStreamExt;
@@ -38,7 +39,7 @@ pub async fn insert_connections_game(
         Err(e) => {
             return match *e.kind {
                 ErrorKind::Write(_) => {
-                    Err(DbError::AlreadyExists("connections_game".to_owned(), slug))
+                    Err(DbError::AlreadyExists(ResourceKind::ConnectionsGame, slug))
                 }
                 _ => Err(e.into()),
             }
@@ -57,7 +58,7 @@ pub async fn get_connection_game_by_slug(
         Ok(maybe_record) => match maybe_record {
             Some(category) => Ok(category),
             None => Err(DbError::NotFound(
-                "connections_game".to_owned(),
+                ResourceKind::ConnectionsGame,
                 slug.to_owned(),
             )),
         },

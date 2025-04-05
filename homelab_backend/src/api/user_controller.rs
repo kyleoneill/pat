@@ -1,9 +1,7 @@
 use super::get_user_from_token;
 use super::return_data::ReturnData;
-use crate::models::user::jwt::{encode_jwt, get_and_decode_auth_token};
-use crate::models::user::user_db::{
-    db_create_user, db_delete_user, db_get_user_by_id, db_get_user_by_username,
-};
+use crate::models::user::jwt::encode_jwt;
+use crate::models::user::user_db::{db_create_user, db_delete_user, db_get_user_by_username};
 use crate::models::user::{AuthLevel, LoginUserSchema, ReturnUser};
 use crate::AppState;
 
@@ -35,9 +33,6 @@ pub fn generate_salt() -> String {
         .collect()
 }
 
-// TODO: The error handling here is pretty bad. It was done quickly to get an MVP off the ground
-//       but it really needs to be refactored
-
 pub fn user_routes() -> Router<AppState> {
     // TODO: This routing is not terribly logically consistent and should be re-done
     // Should have a consistent GET/PUT/DELETE for /user/me and /user/:user_id
@@ -57,7 +52,7 @@ pub fn user_routes() -> Router<AppState> {
 async fn auth_user(
     State(app_state): State<AppState>,
     Json(credentials): Json<LoginUserSchema>,
-) -> ReturnData<String, String> {
+) -> ReturnData<String> {
     let pool = &app_state.db;
     match db_get_user_by_username(pool, credentials.username.as_str()).await {
         Ok(user) => {
@@ -84,7 +79,7 @@ async fn auth_user(
 async fn create_user(
     State(app_state): State<AppState>,
     Json(credentials): Json<LoginUserSchema>,
-) -> ReturnData<ReturnUser, String> {
+) -> ReturnData<ReturnUser> {
     let pool = &app_state.db;
 
     // Check the database if this username is already taken
@@ -121,8 +116,9 @@ async fn create_user(
     match db_get_user_by_username(pool, credentials.username.as_str()).await {
         // TODO: This should probably return an auth token instead?
         Ok(user) => ReturnData::created(Into::<ReturnUser>::into(user)),
-        // TODO: Actual error handling here. In theory this shouldn't be possible
-        Err(_) => ReturnData::internal_error("Internal Error".to_owned()),
+        Err(_) => {
+            ReturnData::internal_error("Unhandled exception after creating a user".to_owned())
+        }
     }
 }
 
@@ -130,7 +126,8 @@ async fn get_user_by_username(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     query_params: Query<HashMap<String, String>>,
-) -> ReturnData<ReturnUser, String> {
+) -> ReturnData<ReturnUser> {
+    // TODO: Should have a general purpose validator
     // Get the username out of query params
     let username = match query_params.get("username") {
         Some(username) => username,
@@ -139,13 +136,19 @@ async fn get_user_by_username(
         }
     };
 
-    // Get the JWT from the Authorization header and decode it
-    // We don't need to do anything with this data, but we do need to validate that a real user made the request
-    let _token_user_id =
-        match get_and_decode_auth_token(&headers, app_state.config.app_secret.as_str()) {
-            Ok(id) => id,
-            Err(e) => return ReturnData::bad_request(e),
+    let user =
+        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
+            Ok(user) => user,
+            Err(e) => return e.into(),
         };
+
+    // TODO: Should have a general purpose permission handler
+    // TODO: Should have a test for this
+    if user.auth_level != AuthLevel::Admin {
+        return ReturnData::forbidden(
+            "Cannot retrieve an account you do not have access to".to_owned(),
+        );
+    }
 
     // Find and return the user
     match db_get_user_by_username(&app_state.db, username.as_str()).await {
@@ -157,7 +160,7 @@ async fn get_user_by_username(
 async fn get_user_me(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-) -> ReturnData<ReturnUser, String> {
+) -> ReturnData<ReturnUser> {
     let user =
         match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
             Ok(user) => user,
@@ -169,35 +172,19 @@ async fn get_user_me(
 async fn delete_user_by_id(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-    Path(user_id): Path<String>,
-) -> ReturnData<(), String> {
-    // Get the JWT from the Authorization header and decode it
-    let token_user_id =
-        match get_and_decode_auth_token(&headers, app_state.config.app_secret.as_str()) {
-            Ok(id) => id,
-            Err(e) => return ReturnData::bad_request(e),
-        };
-
-    // Get the account of the id from the path
-    let user = match db_get_user_by_id(&app_state.db, user_id).await {
-        Ok(user) => user,
-        Err(e) => return e.into(),
-    };
-
-    // Check if the requester id matches the account being deleted
-    if user.get_id() != token_user_id {
-        // The token user's ID does not match the user being deleted
-        // Get the token user's account and check to see if they are an admin
-        match db_get_user_by_id(&app_state.db, token_user_id).await {
-            Ok(user) => {
-                if user.auth_level != AuthLevel::Admin {
-                    return ReturnData::forbidden(
-                        "Cannot delete an account you do not have access to".to_string(),
-                    );
-                }
-            }
+    Path(user_to_delete_id): Path<String>,
+) -> ReturnData<()> {
+    let user =
+        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
+            Ok(user) => user,
             Err(e) => return e.into(),
         };
+
+    // Check if the requester matches the account being deleted, or if they're an admin
+    if user.get_id() != user_to_delete_id && user.auth_level != AuthLevel::Admin {
+        return ReturnData::forbidden(
+            "Cannot delete an account you do not have access to".to_string(),
+        );
     };
 
     // Delete the user
@@ -207,19 +194,15 @@ async fn delete_user_by_id(
     }
 }
 
-async fn delete_user_me(
-    State(app_state): State<AppState>,
-    headers: HeaderMap,
-) -> ReturnData<(), String> {
-    // Get the JWT from the Authorization header and decode it
-    let token_user_id =
-        match get_and_decode_auth_token(&headers, app_state.config.app_secret.as_str()) {
-            Ok(id) => id,
-            Err(e) => return ReturnData::bad_request(e),
+async fn delete_user_me(State(app_state): State<AppState>, headers: HeaderMap) -> ReturnData<()> {
+    let user =
+        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
+            Ok(user) => user,
+            Err(e) => return e.into(),
         };
 
     // Delete the user
-    match db_delete_user(&app_state.db, token_user_id).await {
+    match db_delete_user(&app_state.db, user.get_id()).await {
         Ok(_) => ReturnData::ok(()),
         Err(e) => e.into(),
     }

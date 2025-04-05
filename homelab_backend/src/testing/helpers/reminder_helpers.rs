@@ -1,4 +1,5 @@
 use crate::models::reminder::{Category, Priority, Reminder, ReminderUpdateSchema};
+use crate::testing::helpers::read_error_message;
 use crate::testing::json_bytes;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -26,7 +27,12 @@ pub async fn create_category(
     let res = client.request(req).await.unwrap();
     match res.status() {
         StatusCode::CREATED => (),
-        _ => return Err((res.status(), "Failed to create a category".to_owned())),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
     Ok(serde_json::from_slice(body.as_ref()).unwrap())
@@ -48,7 +54,12 @@ pub async fn get_categories(
     let res = client.request(req).await.unwrap();
     match res.status() {
         StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to get categories".to_owned())),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
     Ok(serde_json::from_slice(body.as_ref()).unwrap())
@@ -73,7 +84,12 @@ pub async fn delete_category_by_id(
     let res = client.request(req).await.unwrap();
     match res.status() {
         StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to delete category by id".to_owned())),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
     }
     let _body = res.into_body().collect().await.unwrap().to_bytes();
     // serde_json::from_slice(body.as_ref()).unwrap();
@@ -103,7 +119,12 @@ pub async fn create_reminder(
     let res = client.request(req).await.unwrap();
     match res.status() {
         StatusCode::CREATED => (),
-        _ => return Err((res.status(), "Failed to create a reminder".to_owned())),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
     Ok(serde_json::from_slice(body.as_ref()).unwrap())
@@ -133,7 +154,12 @@ pub async fn list_reminders(
     let res = client.request(req).await.unwrap();
     match res.status() {
         StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to get reminder list".to_owned())),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
     Ok(serde_json::from_slice(body.as_ref()).unwrap())
@@ -160,11 +186,8 @@ pub async fn update_reminder_helper(
         _ => {
             let status = res.status();
             let body = res.into_body().collect().await.unwrap().to_bytes();
-            let message: String = serde_json::from_slice(body.as_ref()).unwrap();
-            return Err((
-                status,
-                format!("Failed to update reminder with error '{message}'"),
-            ));
+            let message: String = read_error_message(body);
+            return Err((status, message));
         }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -188,7 +211,12 @@ pub async fn delete_reminder_helper(
     let res = client.request(req).await.unwrap();
     match res.status() {
         StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to delete reminder by id".to_owned())),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
     }
     let _body = res.into_body().collect().await.unwrap().to_bytes();
     // serde_json::from_slice(body.as_ref()).unwrap();

@@ -1,6 +1,7 @@
 use crate::models::games::{
     ConnectionGame, ConnectionGameSchema, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow,
 };
+use crate::testing::helpers::read_error_message;
 use crate::testing::json_bytes;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -28,10 +29,10 @@ pub async fn create_connections_game(
     match res.status() {
         StatusCode::CREATED => (),
         _ => {
-            return Err((
-                res.status(),
-                "Failed to create a connection game".to_owned(),
-            ))
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
         }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -59,7 +60,12 @@ pub async fn list_connections_games(
     let res = client.request(req).await.unwrap();
     match res.status() {
         StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to list connection games".to_owned())),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
     Ok(serde_json::from_slice(body.as_ref()).unwrap())
@@ -85,10 +91,10 @@ pub async fn get_game_to_play(
     match res.status() {
         StatusCode::OK => (),
         _ => {
-            return Err((
-                res.status(),
-                "Failed to create a connection game".to_owned(),
-            ))
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
         }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -116,10 +122,10 @@ pub async fn try_connections_solution(
     match res.status() {
         StatusCode::OK => (),
         _ => {
-            return Err((
-                res.status(),
-                "Failed to attempt to solve a connections game row".to_owned(),
-            ))
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
         }
     }
     let body = res.into_body().collect().await.unwrap().to_bytes();

@@ -1,4 +1,5 @@
 use crate::models::user::ReturnUser;
+use crate::testing::helpers::read_error_message;
 use crate::testing::json_bytes;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
@@ -13,7 +14,7 @@ pub async fn create_user(
     username: &str,
     password: &str,
     addr: &SocketAddr,
-) -> Result<(), (StatusCode, String)> {
+) -> Result<ReturnUser, (StatusCode, String)> {
     let req = Request::builder()
         .uri(format!("http://{addr}/api/users"))
         .method("POST")
@@ -25,15 +26,15 @@ pub async fn create_user(
         .unwrap();
     let res = client.request(req).await.unwrap();
     match res.status() {
-        StatusCode::CREATED => Ok(()),
+        StatusCode::CREATED => {
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            Ok(ReturnUser::from_bytes(&body))
+        }
         _ => {
             let status = res.status();
             let body = res.into_body().collect().await.unwrap().to_bytes();
-            let message: String = serde_json::from_slice(body.as_ref()).unwrap();
-            Err((
-                status,
-                format!("Failed to create a user with error '{message}'"),
-            ))
+            let message: String = read_error_message(body);
+            Err((status, message))
         }
     }
 }
@@ -53,20 +54,17 @@ pub async fn auth_user(
             json!({"username": username, "password": password}),
         )))
         .unwrap();
-    let response = client.request(auth_req).await.unwrap();
-    match response.status() {
+    let res = client.request(auth_req).await.unwrap();
+    match res.status() {
         StatusCode::CREATED => (),
         _ => {
-            return Err((
-                response.status(),
-                format!(
-                    "Failed to auth as user {} with password {}",
-                    username, password
-                ),
-            ))
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
         }
     };
-    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
     let body_as_ref = body.as_ref();
     let slice = &body_as_ref[1..body_as_ref.len() - 1];
     Ok(std::str::from_utf8(slice).unwrap().to_string())
@@ -89,12 +87,38 @@ pub async fn get_user_me(
     match res.status() {
         StatusCode::OK => (),
         _ => {
-            return Err((
-                res.status(),
-                format!("Failed to get a user using token {}", token),
-            ))
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
         }
     };
     let body = res.into_body().collect().await.unwrap().to_bytes();
     Ok(ReturnUser::from_bytes(&body))
+}
+
+pub async fn delete_user_me(
+    client: &Client<HttpConnector, Body>,
+    token: &str,
+    addr: &SocketAddr,
+) -> Result<(), (StatusCode, String)> {
+    let req = Request::builder()
+        .uri(format!("http://{addr}/api/users/me"))
+        .method("DELETE")
+        .header("Host", "localhost")
+        .header("Content-Type", "application/json")
+        .header("authorization", token)
+        .body(Body::empty())
+        .unwrap();
+    let res = client.request(req).await.unwrap();
+    match res.status() {
+        StatusCode::OK => (),
+        _ => {
+            let status = res.status();
+            let body = res.into_body().collect().await.unwrap().to_bytes();
+            let message: String = read_error_message(body);
+            return Err((status, message));
+        }
+    };
+    Ok(())
 }

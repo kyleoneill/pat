@@ -1,3 +1,5 @@
+use hyper::body::Bytes;
+use serde_json::{value::Value, Map};
 use std::fmt;
 
 pub mod games_helpers;
@@ -15,4 +17,15 @@ where
         .collect::<String>();
     res.pop();
     res
+}
+
+pub fn read_error_message(body: Bytes) -> String {
+    let res: Map<String, Value> = serde_json::from_slice(body.as_ref()).unwrap();
+    match res
+        .get("msg")
+        .expect("Failed to read 'msg' field in an error message")
+    {
+        Value::String(error_msg) => error_msg.to_owned(),
+        _ => panic!("Failed to convert error message from response into a string"),
+    }
 }
