@@ -1,4 +1,5 @@
 use super::{AuthLevel, User};
+use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::Bson;
@@ -31,9 +32,9 @@ pub async fn db_get_user_by_username(pool: &Database, username: &str) -> Result<
     match collection.find_one(doc).await {
         Ok(maybe_record) => match maybe_record {
             Some(user) => Ok(user),
-            None => Err(DbError::NotFound("user".to_owned(), username.to_owned())),
+            None => Err(DbError::NotFound(ResourceKind::User, username.to_owned())),
         },
-        Err(e) => Err(DbError::from(e)),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -46,7 +47,7 @@ pub async fn db_delete_user(pool: &Database, user_id: String) -> Result<(), DbEr
     let doc = doc! { "_id": Bson::ObjectId(bson_id) };
     match collection.delete_one(doc).await {
         Ok(_) => Ok(()),
-        Err(e) => Err(DbError::from(e)),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -60,8 +61,8 @@ pub async fn db_get_user_by_id(pool: &Database, id: String) -> Result<User, DbEr
     match collection.find_one(doc).await {
         Ok(maybe_record) => match maybe_record {
             Some(user) => Ok(user),
-            None => Err(DbError::NotFound("user".to_owned(), id.to_string())),
+            None => Err(DbError::NotFound(ResourceKind::User, id.to_string())),
         },
-        Err(e) => Err(DbError::from(e)),
+        Err(e) => Err(e.into()),
     }
 }

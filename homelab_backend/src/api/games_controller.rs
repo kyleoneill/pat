@@ -29,7 +29,7 @@ async fn create_connections(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Json(connection_data): Json<ConnectionGameSchema>,
-) -> ReturnData<ConnectionGame, String> {
+) -> ReturnData<ConnectionGame> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -44,7 +44,7 @@ async fn create_connections(
 async fn list_my_connections_games(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-) -> ReturnData<Vec<MinimalConnectionsGame>, String> {
+) -> ReturnData<Vec<MinimalConnectionsGame>> {
     // TODO: This should be paginated
     // TODO: This and list_other_connections_games should both just call a shared function passing it a true/false
     let pool = &app_state.db;
@@ -67,7 +67,7 @@ async fn list_my_connections_games(
 async fn list_other_connections_games(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-) -> ReturnData<Vec<MinimalConnectionsGame>, String> {
+) -> ReturnData<Vec<MinimalConnectionsGame>> {
     // TODO: This should be paginated
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
@@ -90,7 +90,7 @@ async fn get_game_to_play(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Path(game_slug): Path<String>,
-) -> ReturnData<PlayConnectionGame, String> {
+) -> ReturnData<PlayConnectionGame> {
     let pool = &app_state.db;
     let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -107,7 +107,7 @@ async fn try_solve_row(
     headers: HeaderMap,
     Path(game_slug): Path<String>,
     Json(row_guess): Json<[String; 4]>,
-) -> ReturnData<TrySolveRow, String> {
+) -> ReturnData<TrySolveRow> {
     let pool = &app_state.db;
     let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,

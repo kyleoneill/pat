@@ -16,10 +16,7 @@ pub fn log_routes() -> Router<AppState> {
         .route("/logs/:log_id", get(get_log_by_id))
 }
 
-async fn get_logs(
-    State(app_state): State<AppState>,
-    headers: HeaderMap,
-) -> ReturnData<Vec<Log>, String> {
+async fn get_logs(State(app_state): State<AppState>, headers: HeaderMap) -> ReturnData<Vec<Log>> {
     // TODO: This has the potential to return a lot of data. There should be a hard limit for logs
     //       returned, and this endpoint should be paginated / sortable. Should have a query
     //       param to specify how many logs are returned.
@@ -39,7 +36,7 @@ async fn get_log_by_id(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Path(log_id): Path<String>,
-) -> ReturnData<Log, String> {
+) -> ReturnData<Log> {
     let pool = &app_state.db;
     // Get the user here just to auth them, we don't actually need the user data
     let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {

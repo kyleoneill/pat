@@ -1,38 +1,43 @@
+use mongodb::error::ErrorKind;
+
 use crate::api::return_data::ReturnData;
-use mongodb::error;
+use crate::db::resource_kinds::ResourceKind;
 
 #[derive(Debug)]
 pub enum DbError {
-    AlreadyExists(String, String),
-    NotFound(String, String),
-    RelationshipViolation(String, String),
-    UnhandledException,
-    EmptyDbExpression(String, String),
+    AlreadyExists(ResourceKind, String),
+    NotFound(ResourceKind, String),
+    RelationshipViolation(ResourceKind, String),
+    EmptyDbExpression(ResourceKind, String),
     BadId,
-    ExpressionFailed,
+    AuthFailure,
+    UnhandledException(String),
 }
 
 // Translate MongoDB errors into our error struct
-// TODO: Handle db errors
-impl From<error::Error> for DbError {
-    fn from(_value: error::Error) -> Self {
-        DbError::UnhandledException
-        // match *value.kind {
-        //     _ => DbError::UnhandledException,
-        // }
+// TODO: Handle more db errors
+impl From<mongodb::error::Error> for DbError {
+    fn from(value: mongodb::error::Error) -> Self {
+        match *value.kind {
+            ErrorKind::InvalidArgument { .. } => {
+                DbError::UnhandledException("Invalid argument to database".to_owned())
+            }
+            ErrorKind::Authentication { .. } => DbError::AuthFailure,
+            _ => DbError::UnhandledException("Unhandled failure".to_owned()),
+        }
     }
 }
 
-impl<T> From<DbError> for ReturnData<T, String> {
+impl<T> From<DbError> for ReturnData<T> {
     fn from(value: DbError) -> Self {
         match value {
-            DbError::AlreadyExists(resource_type, resource) => ReturnData::bad_request(format!(
-                "A {} with value {} already exists",
-                resource_type, resource
+            DbError::AlreadyExists(resource_type, identifier) => ReturnData::bad_request(format!(
+                "A {} with identifier {} already exists",
+                resource_type, identifier
             )),
-            DbError::NotFound(resource_type, resource_slug) => ReturnData::not_found(format!(
+            DbError::NotFound(resource_type, identifier) => ReturnData::not_found(format!(
                 "{} with identifier {} not found",
-                resource_type, resource_slug
+                resource_type, identifier
             )),
             DbError::RelationshipViolation(resource_type, identifier) => {
                 ReturnData::bad_request(format!(
@@ -40,31 +45,37 @@ impl<T> From<DbError> for ReturnData<T, String> {
                     resource_type, identifier
                 ))
             }
-            DbError::EmptyDbExpression(operation, data_type) => ReturnData::bad_request(format!(
-                "Received no data while {} {}, resulting in a no-op",
-                operation, data_type
-            )),
-            DbError::UnhandledException => ReturnData::internal_error(
-                "Unhandled exception when making a database request".to_owned(),
-            ),
+            DbError::EmptyDbExpression(resource_type, operation) => {
+                ReturnData::bad_request(format!(
+                    "Received no data while {} {}, resulting in a no-op",
+                    operation, resource_type
+                ))
+            }
             DbError::BadId => ReturnData::bad_request("The provided ID was not valid".to_owned()),
-            // TODO: This error is ambiguous and should be made better
-            DbError::ExpressionFailed => ReturnData::internal_error(
-                "The specified database operation failed to produce the expected result".to_owned(),
-            ),
+            DbError::AuthFailure => {
+                ReturnData::unauthorized("Auth failure while reading database".to_owned())
+            }
+            DbError::UnhandledException(error_while) => ReturnData::internal_error(format!(
+                "Unhandled exception when making a database request: {}",
+                error_while
+            )),
         }
     }
 }
 
-pub enum InternalError {
-    FailedAuthentication,
+pub enum ServerError {
+    FailedAuthentication(String),
+    InternalFailure(String),
 }
 
-impl<T> From<InternalError> for ReturnData<T, String> {
-    fn from(value: InternalError) -> Self {
+impl<T> From<ServerError> for ReturnData<T> {
+    fn from(value: ServerError) -> Self {
         match value {
-            InternalError::FailedAuthentication => {
-                ReturnData::unauthorized("Invalid authorization token".to_owned())
+            ServerError::FailedAuthentication(reason) => {
+                ReturnData::unauthorized(format!("Auth failure: {}", reason))
+            }
+            ServerError::InternalFailure(failure_while) => {
+                ReturnData::internal_error(format!("Internal server error while: {failure_while}"))
             }
         }
     }

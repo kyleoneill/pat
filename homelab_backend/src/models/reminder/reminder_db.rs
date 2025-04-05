@@ -1,4 +1,5 @@
 use super::{Category, CategorySchema, Reminder, ReminderSchema, ReminderUpdateSchema};
+use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use futures::{StreamExt, TryStreamExt};
 use mongodb::bson::oid::ObjectId;
@@ -27,7 +28,7 @@ pub async fn insert_category(
         Err(e) => {
             return match *e.kind {
                 ErrorKind::Write(_) => Err(DbError::AlreadyExists(
-                    "category".to_owned(),
+                    ResourceKind::ReminderCategory,
                     data.slug.clone(),
                 )),
                 _ => Err(e.into()),
@@ -58,7 +59,10 @@ pub async fn get_category_by_slug(pool: &Database, slug: &str) -> Result<Categor
     match collection.find_one(doc).await {
         Ok(maybe_record) => match maybe_record {
             Some(category) => Ok(category),
-            None => Err(DbError::NotFound("category".to_owned(), slug.to_owned())),
+            None => Err(DbError::NotFound(
+                ResourceKind::ReminderCategory,
+                slug.to_owned(),
+            )),
         },
         Err(e) => Err(e.into()),
     }
@@ -79,7 +83,7 @@ pub async fn delete_category_by_id(
         Ok(mut cursor) => {
             if cursor.next().await.is_some() {
                 return Err(DbError::RelationshipViolation(
-                    "category".to_owned(),
+                    ResourceKind::ReminderCategory,
                     category_id.clone(),
                 ));
             }
@@ -127,7 +131,11 @@ pub async fn insert_reminder(
     let new_doc_id = match reminder_collection.insert_one(doc).await {
         Ok(res) => match res.inserted_id {
             Bson::ObjectId(id) => id.to_string(),
-            _ => return Err(DbError::UnhandledException),
+            _ => {
+                return Err(DbError::UnhandledException(
+                    "Failed to insert a new reminder".to_owned(),
+                ))
+            }
         },
         Err(e) => return Err(e.into()),
     };
@@ -146,7 +154,7 @@ pub async fn get_reminder_by_id(pool: &Database, id: String) -> Result<Reminder,
     match reminder_collection.find_one(doc).await {
         Ok(maybe_doc) => match maybe_doc {
             Some(doc) => Ok(doc),
-            None => Err(DbError::NotFound("reminder".to_owned(), id.to_string())),
+            None => Err(DbError::NotFound(ResourceKind::Reminder, id.to_string())),
         },
         Err(e) => {
             println!("{:?}", e);
@@ -210,8 +218,8 @@ pub async fn db_update_reminder(
 
     if doc.is_empty() {
         return Err(DbError::EmptyDbExpression(
+            ResourceKind::Reminder,
             "updating".to_owned(),
-            "reminder".to_owned(),
         ));
     }
 
