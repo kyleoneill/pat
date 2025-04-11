@@ -1,8 +1,7 @@
 use crate::models::reminder::{Category, Priority, Reminder, ReminderUpdateSchema};
-use crate::testing::json_bytes;
+use crate::testing::helpers::{delete_request, get_request, post_request, put_request};
 use axum::body::Body;
-use axum::http::{Request, StatusCode};
-use http_body_util::BodyExt;
+use axum::http::StatusCode;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use serde_json::json;
@@ -15,21 +14,8 @@ pub async fn create_category(
     name: &str,
     addr: &SocketAddr,
 ) -> Result<Category, (StatusCode, String)> {
-    let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders/category"))
-        .method("POST")
-        .header("Host", "localhost")
-        .header("Content-Type", "application/json")
-        .header("authorization", token)
-        .body(Body::from(json_bytes(json!({"slug": slug, "name": name}))))
-        .unwrap();
-    let res = client.request(req).await.unwrap();
-    match res.status() {
-        StatusCode::CREATED => (),
-        _ => return Err((res.status(), "Failed to create a category".to_owned())),
-    }
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+    let data = json!({"slug": slug, "name": name});
+    post_request(client, "/reminders/category", data, Some(token), addr).await
 }
 
 pub async fn get_categories(
@@ -37,21 +23,7 @@ pub async fn get_categories(
     token: &str,
     addr: &SocketAddr,
 ) -> Result<Vec<Category>, (StatusCode, String)> {
-    let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders/category"))
-        .method("GET")
-        .header("Host", "localhost")
-        .header("Content-Type", "application/json")
-        .header("authorization", token)
-        .body(Body::from(()))
-        .unwrap();
-    let res = client.request(req).await.unwrap();
-    match res.status() {
-        StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to get categories".to_owned())),
-    }
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+    get_request(client, "/reminders/category", token, addr).await
 }
 
 pub async fn delete_category_by_id(
@@ -60,24 +32,8 @@ pub async fn delete_category_by_id(
     addr: &SocketAddr,
     category_id: String,
 ) -> Result<(), (StatusCode, String)> {
-    let req = Request::builder()
-        .uri(format!(
-            "http://{addr}/api/reminders/category/{category_id}"
-        ))
-        .method("DELETE")
-        .header("Host", "localhost")
-        .header("Content-Type", "application/json")
-        .header("authorization", token)
-        .body(Body::from(()))
-        .unwrap();
-    let res = client.request(req).await.unwrap();
-    match res.status() {
-        StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to delete category by id".to_owned())),
-    }
-    let _body = res.into_body().collect().await.unwrap().to_bytes();
-    // serde_json::from_slice(body.as_ref()).unwrap();
-    Ok(())
+    let path = format!("/reminders/category/{category_id}");
+    delete_request(client, path.as_str(), token, addr).await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -90,23 +46,8 @@ pub async fn create_reminder(
     priority: Priority,
     addr: &SocketAddr,
 ) -> Result<Reminder, (StatusCode, String)> {
-    let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders"))
-        .method("POST")
-        .header("Host", "localhost")
-        .header("Content-Type", "application/json")
-        .header("authorization", token)
-        .body(Body::from(json_bytes(
-            json!({"name": name, "description": description, "categories": categories, "priority": priority}),
-        )))
-        .unwrap();
-    let res = client.request(req).await.unwrap();
-    match res.status() {
-        StatusCode::CREATED => (),
-        _ => return Err((res.status(), "Failed to create a reminder".to_owned())),
-    }
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+    let data = json!({"name": name, "description": description, "categories": categories, "priority": priority});
+    post_request(client, "/reminders", data, Some(token), addr).await
 }
 
 pub async fn list_reminders(
@@ -118,25 +59,11 @@ pub async fn list_reminders(
     let built_uri = match categories {
         Some(filter_categories) => {
             let params = super::list_to_query_params("categories", filter_categories);
-            format!("http://{addr}/api/reminders?{params}")
+            format!("/reminders?{params}")
         }
-        None => format!("http://{addr}/api/reminders"),
+        None => "/reminders".to_string(),
     };
-    let req = Request::builder()
-        .uri(built_uri)
-        .method("GET")
-        .header("Host", "localhost")
-        .header("Content-Type", "application/json")
-        .header("authorization", token)
-        .body(Body::from(()))
-        .unwrap();
-    let res = client.request(req).await.unwrap();
-    match res.status() {
-        StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to get reminder list".to_owned())),
-    }
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+    get_request(client, built_uri.as_str(), token, addr).await
 }
 
 pub async fn update_reminder_helper(
@@ -146,29 +73,9 @@ pub async fn update_reminder_helper(
     reminder_id: String,
     reminder_updates: ReminderUpdateSchema,
 ) -> Result<Reminder, (StatusCode, String)> {
-    let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders/{reminder_id}"))
-        .method("PUT")
-        .header("Host", "localhost")
-        .header("Content-Type", "application/json")
-        .header("authorization", token)
-        .body(Body::from(json_bytes(json!(reminder_updates))))
-        .unwrap();
-    let res = client.request(req).await.unwrap();
-    match res.status() {
-        StatusCode::OK => (),
-        _ => {
-            let status = res.status();
-            let body = res.into_body().collect().await.unwrap().to_bytes();
-            let message: String = serde_json::from_slice(body.as_ref()).unwrap();
-            return Err((
-                status,
-                format!("Failed to update reminder with error '{message}'"),
-            ));
-        }
-    }
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    Ok(serde_json::from_slice(body.as_ref()).unwrap())
+    let path = format!("/reminders/{reminder_id}");
+    let data = json!(reminder_updates);
+    put_request(client, path.as_str(), data, token, addr).await
 }
 
 pub async fn delete_reminder_helper(
@@ -177,20 +84,6 @@ pub async fn delete_reminder_helper(
     token: &str,
     reminder_id: String,
 ) -> Result<(), (StatusCode, String)> {
-    let req = Request::builder()
-        .uri(format!("http://{addr}/api/reminders/{reminder_id}"))
-        .method("DELETE")
-        .header("Host", "localhost")
-        .header("Content-Type", "application/json")
-        .header("authorization", token)
-        .body(Body::from(()))
-        .unwrap();
-    let res = client.request(req).await.unwrap();
-    match res.status() {
-        StatusCode::OK => (),
-        _ => return Err((res.status(), "Failed to delete reminder by id".to_owned())),
-    }
-    let _body = res.into_body().collect().await.unwrap().to_bytes();
-    // serde_json::from_slice(body.as_ref()).unwrap();
-    Ok(())
+    let path = format!("/reminders/{reminder_id}");
+    delete_request(client, path.as_str(), token, addr).await
 }

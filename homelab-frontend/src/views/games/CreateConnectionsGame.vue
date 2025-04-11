@@ -5,10 +5,9 @@
 
   import { createConnectionsGame } from '@/api/games_api';
   import { CreateConnectionsGame } from '@/models/games_interfaces';
-  import Toaster from "@/components/ToasterComponent.vue";
-  import ConnectionCategoryForm from '@/components/games/connections/ConnectionCategoryForm.vue'
-  import useToasterStore from '@/stores/useToasterStore'
+  import ConnectionCategoryForm from '@/components/games/connections/ConnectionCategoryForm.vue';
 
+  import useToasterStore from '@/stores/useToasterStore';
   const toasterStore = useToasterStore();
 
   const loading = ref(false);
@@ -27,7 +26,7 @@
       toasterStore.success({text: `Created new connections game with name ${puzzle_data.value.puzzle_name}`});
       puzzle_data.value = new CreateConnectionsGame();
     }).catch(error => {
-      // TODO
+      toasterStore.responseError({error: error});
     }).finally(() => {
       loading.value = false;
     })
@@ -35,7 +34,6 @@
 </script>
 
 <template>
-  <Toaster />
   <div class="section-header">
     <RouterLink class="router-button" to="/games/connections">Back</RouterLink>
   </div>

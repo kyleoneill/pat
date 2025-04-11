@@ -5,7 +5,6 @@
 
   import type { ScrambledGame } from "@/models/games_interfaces";
 
-  import Toaster from "@/components/ToasterComponent.vue";
   import useToasterStore from '@/stores/useToasterStore'
   const toasterStore = useToasterStore();
 
@@ -102,7 +101,7 @@
           toasterStore.warning({text: "Incorrect guess"});
         }
       }).catch(error => {
-        // TODO
+        toasterStore.responseError({error: error});
       }).finally(() => {
         loading.value = false;
       });
@@ -115,7 +114,7 @@
       currentGame.value = response.data;
       gameState.value.clues = response.data['scrambled_clues'];
     }).catch(error => {
-      // TODO
+      toasterStore.responseError({error: error});
     }).finally(() => {
       loading.value = false;
     });
@@ -127,7 +126,6 @@
 </script>
 
 <template>
-  <Toaster />
   <div class="section-header">
     <RouterLink class="router-button" to="/games/connections">Back</RouterLink>
   </div>

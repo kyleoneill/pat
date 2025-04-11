@@ -6,47 +6,46 @@ import { getAllReminders, getAllReminderCategories, deleteReminderById } from '@
 import ReminderCards from '@/components/reminders/ReminderCards.vue'
 import type { Reminder, ReminderCategory } from '@/models/reminder_interfaces'
 
-import Toaster from "@/components/ToasterComponent.vue"
 import useToasterStore from '@/stores/useToasterStore'
 const toasterStore = useToasterStore();
 
-const loading = ref(true)
-const reminders: Ref<Map<string, Array<Reminder>>> = ref(new Map<string, Array<Reminder>>())
-const categories = ref(new Map<string, ReminderCategory>)
+const loading = ref(true);
+const reminders: Ref<Map<string, Array<Reminder>>> = ref(new Map<string, Array<Reminder>>());
+const categories = ref(new Map<string, ReminderCategory>);
 
-const priorities = ["Very High", "High", "Medium", "Low"]
+const priorities = ["Very High", "High", "Medium", "Low"];
 
 function fetch_reminders() {
   getAllReminders().then(response => {
     for (const i in response.data) {
-      const reminder: Reminder = response.data[i]
+      const reminder: Reminder = response.data[i];
 
       // Swap out the ID in reminder.categories with the name of each category
-      const categoryIds = reminder.categories
-      reminder.categories = []
+      const categoryIds = reminder.categories;
+      reminder.categories = [];
       for (const i in categoryIds) {
-        const category = categories.value.get(categoryIds[i])
+        const category = categories.value.get(categoryIds[i]);
         if (category !== undefined) {
-          reminder.categories.push(category.name)
+          reminder.categories.push(category.name);
         }
       }
 
       if(reminders.value.has(reminder.priority)) {
-        const reminderList = reminders.value.get(reminder.priority)
+        const reminderList = reminders.value.get(reminder.priority);
         if(reminderList === undefined) {
           // TODO: Raise an error here? This shouldn't be a possible state
-          console.log("Impossible error state reached")
+          console.log("Impossible error state reached");
         }
         else {
-          reminderList.push(reminder)
+          reminderList.push(reminder);
         }
       }
       else {
-        reminders.value.set(reminder.priority, [reminder])
+        reminders.value.set(reminder.priority, [reminder]);
       }
     }
   }).catch(error => {
-    // TODO: Should hook into an error handler set up in App.vue
+    toasterStore.responseError({error: error});
   })
 }
 
@@ -55,41 +54,40 @@ function fetch_reminder_categories() {
     const categoryMap = new Map();
     for (const i in response.data) {
       const category: ReminderCategory = response.data[i]
-      categoryMap.set(category._id, category)
+      categoryMap.set(category._id, category);
     }
     categories.value = categoryMap
   }).catch(error => {
-    // TODO: Should hook into an error handler set up in App.vue
+    toasterStore.responseError({error: error});
   })
 }
 
 function handleDeleteReminder(priority: string, reminderId: string, reminderName: string) {
   deleteReminderById(reminderId).then(res => {
-    const reminderList = reminders.value.get(priority)
+    const reminderList = reminders.value.get(priority);
     if (reminderList !== undefined) {
       const newReminders = reminderList.filter(reminder => reminder._id !== reminderId)
       if(newReminders.length === 0) {
-        reminders.value.delete(priority)
+        reminders.value.delete(priority);
       }
       else {
-        reminders.value.set(priority, newReminders)
+        reminders.value.set(priority, newReminders);
       }
     }
     toasterStore.success({text: `Deleted reminder ${reminderName}`});
-  }).catch(err => {
-    // TODO
+  }).catch(error => {
+    toasterStore.responseError({error: error});
   })
 }
 
-fetch_reminder_categories()
-fetch_reminders()
+fetch_reminder_categories();
+fetch_reminders();
 
-loading.value = false
+loading.value = false;
 
 </script>
 
 <template>
-  <Toaster />
   <div class="reminders">
     <div class="section-header">
       <RouterLink class="router-button" to="/reminders/new">Create Reminder</RouterLink>

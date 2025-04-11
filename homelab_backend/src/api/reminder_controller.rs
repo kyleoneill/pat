@@ -35,7 +35,7 @@ async fn create_category(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Json(category_data): Json<CategorySchema>,
-) -> ReturnData<Category, String> {
+) -> ReturnData<Category> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -50,7 +50,7 @@ async fn create_category(
 async fn get_categories(
     State(app_state): State<AppState>,
     headers: HeaderMap,
-) -> ReturnData<Vec<Category>, String> {
+) -> ReturnData<Vec<Category>> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -66,7 +66,7 @@ async fn delete_category(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Path(category_id): Path<String>,
-) -> ReturnData<(), String> {
+) -> ReturnData<()> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -88,7 +88,7 @@ async fn create_reminder(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Json(reminder_data): Json<ReminderSchema>,
-) -> ReturnData<Reminder, String> {
+) -> ReturnData<Reminder> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -109,7 +109,7 @@ async fn list_reminders(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     query_params: ListQuery<ListRemindersQueryParams>,
-) -> ReturnData<Vec<Reminder>, String> {
+) -> ReturnData<Vec<Reminder>> {
     // TODO: Pagination
     //       Sort
     let pool = &app_state.db;
@@ -130,7 +130,7 @@ async fn update_reminder(
     headers: HeaderMap,
     Path(reminder_id): Path<String>,
     Json(update_data): Json<ReminderUpdateSchema>,
-) -> ReturnData<Reminder, String> {
+) -> ReturnData<Reminder> {
     let pool = &app_state.db;
     let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -146,7 +146,7 @@ async fn delete_reminder(
     State(app_state): State<AppState>,
     headers: HeaderMap,
     Path(reminder_id): Path<String>,
-) -> ReturnData<(), String> {
+) -> ReturnData<()> {
     let pool = &app_state.db;
     let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,

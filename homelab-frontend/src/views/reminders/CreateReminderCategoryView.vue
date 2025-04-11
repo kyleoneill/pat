@@ -3,6 +3,9 @@ import { ref } from 'vue';
 
 import { createReminderCategory } from '@/api/reminders_api';
 
+import useToasterStore from '@/stores/useToasterStore'
+const toasterStore = useToasterStore();
+
 const slug = ref('');
 const name = ref('');
 
@@ -10,17 +13,17 @@ const loading = ref(false);
 
 function createNewCategory() {
   if (slug.value === '' || name.value === '') {
-    // TODO: Error message here when I have a better way to render them
+    toasterStore.error({text: "Must have reminder details filled out"});
     return
   }
-  loading.value = true
+  loading.value = true;
   createReminderCategory(name.value, slug.value).then(response => {
-    slug.value = ''
-    name.value = ''
+    slug.value = '';
+    name.value = '';
   }).catch(error => {
-    // TODO
+    toasterStore.responseError({error: error});
   }).finally(() => {
-    loading.value = false
+    loading.value = false;
   })
 }
 </script>

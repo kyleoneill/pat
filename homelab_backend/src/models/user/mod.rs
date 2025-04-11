@@ -1,7 +1,6 @@
 pub mod jwt;
 pub mod user_db;
 
-use axum::body::Bytes;
 use mongodb::bson::Bson;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -84,13 +83,6 @@ impl From<User> for ReturnUser {
             id: value.get_id(),
             username: value.username,
         }
-    }
-}
-
-impl ReturnUser {
-    #[allow(dead_code)] // used in test
-    pub fn from_bytes(input: &Bytes) -> Self {
-        serde_json::from_slice(input).unwrap()
     }
 }
 

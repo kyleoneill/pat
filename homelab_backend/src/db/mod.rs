@@ -1,3 +1,5 @@
+pub mod resource_kinds;
+
 use crate::models::games::ConnectionGame;
 use crate::models::reminder::Category;
 use crate::models::user::user_db::db_create_user;

@@ -1,29 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { authUser } from '@/api/user_api'
+import { ref } from 'vue';
+import { authUser } from '@/api/user_api';
 
-const username = ref('')
-const password = ref('')
+import useToasterStore from '@/stores/useToasterStore';
+const toasterStore = useToasterStore();
 
-const display_username_error_msg = ref(false)
-const display_password_error_msg = ref(false)
-const response_error = ref('')
-const loading = ref(false)
+const username = ref('');
+const password = ref('');
+
+const loading = ref(false);
 
 function try_login() {
-  // Reset values if they were set from a previous attempt
-  display_username_error_msg.value = false
-  display_password_error_msg.value = false
-  response_error.value = ''
-
-
   // Check if the username or password are not set
   if(username.value === '') {
-    display_username_error_msg.value = true
+    toasterStore.error({text: "Must enter a username"});
     return
   }
   else if(password.value === '') {
-    display_password_error_msg.value = true
+    toasterStore.error({text: "Must enter a password"});
     return
   }
 
@@ -31,13 +25,12 @@ function try_login() {
   loading.value = true
   authUser(username.value, password.value)
     .then(response => {
-      localStorage.setItem("token", response.data)
-      location.reload()
+      localStorage.setItem("token", response.data);
+      location.reload();
     }).catch(error => {
-      // TODO: Verify that `error.response.status === 404`? What do we do if else?
-      response_error.value = error.response.data
+      toasterStore.responseError({error: error});
     }).finally(() => {
-      loading.value = false
+      loading.value = false;
     })
 }
 </script>
@@ -48,20 +41,11 @@ function try_login() {
 
     <p>Username:</p>
     <input v-model="username">
-    <div v-if="display_username_error_msg === true">
-      <p class="error-text">Invalid Username</p>
-    </div>
-    <br v-else />
 
     <p>Password:</p>
     <input v-model="password" type="password">
-    <div v-if="display_password_error_msg === true">
-      <p class="error-text">Invalid Password</p>
-    </div>
-    <br v-else />
 
     <button :disabled="loading === true" @click="try_login">Login</button>
-    <p class="error-text" v-if="response_error !== ''">{{response_error}}</p>
   </div>
 </template>
 
@@ -84,5 +68,9 @@ h1 {
 button {
   margin-top: 1rem;
   padding-inline: 1.25rem;
+}
+
+input {
+  margin-bottom: 0.75rem;
 }
 </style>
