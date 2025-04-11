@@ -7,7 +7,6 @@ import type { ReminderCategory } from '@/models/reminder_interfaces'
 
 import { Priority } from '@/models/reminder_interfaces'
 
-import Toaster from "@/components/ToasterComponent.vue"
 import useToasterStore from '@/stores/useToasterStore'
 const toasterStore = useToasterStore();
 
@@ -32,7 +31,7 @@ function createNewReminder() {
     reminderCategories.value = []
     priority.value = Priority.Medium
   }).catch(error => {
-    // TODO
+    toasterStore.responseError({error: error});
   }).finally(() => {
     loading.value = false
   })
@@ -42,7 +41,7 @@ function fetch_reminder_categories() {
   getAllReminderCategories().then(response => {
     categories.value = response.data
   }).catch(error => {
-    // TODO: Should hook into an error handler set up in App.vue
+    toasterStore.responseError({error: error});
   })
 }
 
@@ -51,7 +50,6 @@ loading.value = false
 </script>
 
 <template>
-  <Toaster />
   <h2>Create Reminder</h2>
   <div class="input-section">
     <p>Name:</p>
