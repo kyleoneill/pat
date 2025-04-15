@@ -19,6 +19,7 @@ use axum::http::header::{
     ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONNECTION, CONTENT_TYPE, DNT, HOST,
     ORIGIN, REFERER, USER_AGENT,
 };
+use axum::http::Method;
 use axum::{http::Request, routing::get, Router};
 use tokio::{task, time};
 use tower::ServiceBuilder;
@@ -32,6 +33,8 @@ use tower_http::{
 use tracing::Span;
 
 use mongodb::Database;
+
+const LOGGABLE_METHODS: [Method; 4] = [Method::GET, Method::PUT, Method::POST, Method::DELETE];
 
 #[derive(Clone)]
 pub struct AppState {
@@ -86,20 +89,22 @@ pub async fn generate_app(database: Database) -> Router {
     let trace_layer = TraceLayer::new_for_http()
         //.make_span_with(|request: &Request<_>| {})
         .on_request(move |request: &Request<_>, _span: &Span| {
-            // If a request does not have an associated user id, mark it as -1
-            let user_id = get_and_decode_auth_token(request.headers(), app_secret.as_str())
-                .unwrap_or("-1".to_string());
-            let date_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
-            let new_task = tasks::log_creation_task::LogCreationTask::new(
-                request.method().to_string(),
-                request.uri().to_string(),
-                user_id,
-                date_time,
-            );
-            log_tx.send(new_task).unwrap();
+            if LOGGABLE_METHODS.contains(request.method()) {
+                // If a request does not have an associated user id, mark it as -1
+                let user_id = get_and_decode_auth_token(request.headers(), app_secret.as_str())
+                    .unwrap_or("-1".to_string());
+                let date_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                let new_task = tasks::log_creation_task::LogCreationTask::new(
+                    request.method().to_string(),
+                    request.uri().to_string(),
+                    user_id,
+                    date_time,
+                );
+                log_tx.send(new_task).unwrap();
+            }
         });
     // .on_response(|_response: &Response, _latency: Duration, _span: &Span| {})
     // .on_body_chunk(|_chunk: &Bytes, _latency: Duration, _span: &Span| {})
