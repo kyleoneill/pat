@@ -7,6 +7,7 @@ pub enum ResourceKind {
     User,
     ConnectionsGame,
     Log,
+    ChatChannel,
 }
 
 impl Display for ResourceKind {
@@ -17,6 +18,7 @@ impl Display for ResourceKind {
             ResourceKind::User => "User",
             ResourceKind::ConnectionsGame => "Connections Game",
             ResourceKind::Log => "Log",
+            ResourceKind::ChatChannel => "Chat Channel",
         };
         write!(f, "{}", thing)
     }

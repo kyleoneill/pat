@@ -1,26 +1,33 @@
 #[macro_use]
 extern crate dotenv_codegen;
 
+use std::net::SocketAddr;
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod api;
 mod db;
 pub mod error_handler;
+mod logger;
 mod models;
 mod tasks;
 mod testing;
 
 use models::user::jwt::get_and_decode_auth_token;
 
-use api::{games_controller, log_controller, reminder_controller, user_controller};
+use api::{
+    chat_controller, games_controller, log_controller, reminder_controller, user_controller,
+};
 
 use axum::http::header::{
-    ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CONNECTION, CONTENT_TYPE, DNT, HOST,
-    ORIGIN, REFERER, USER_AGENT,
+    ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CACHE_CONTROL, CONNECTION,
+    CONTENT_TYPE, DNT, HOST, ORIGIN, PRAGMA, REFERER, SEC_WEBSOCKET_ACCEPT,
+    SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION,
+    USER_AGENT,
 };
 use axum::http::Method;
 use axum::{http::Request, routing::get, Router};
+use hyper::header::UPGRADE;
 use tokio::{task, time};
 use tower::ServiceBuilder;
 use tower_http::{
@@ -33,6 +40,7 @@ use tower_http::{
 use tracing::Span;
 
 use mongodb::Database;
+use tower_http::trace::DefaultMakeSpan;
 
 const LOGGABLE_METHODS: [Method; 4] = [Method::GET, Method::PUT, Method::POST, Method::DELETE];
 
@@ -80,7 +88,8 @@ pub async fn generate_app(database: Database) -> Router {
         .merge(user_controller::user_routes())
         .merge(log_controller::log_routes())
         .merge(reminder_controller::reminder_routes())
-        .merge(games_controller::games_routes());
+        .merge(games_controller::games_routes())
+        .merge(chat_controller::chat_routes());
 
     // Create a channel to pass log information to the db write task
     let (log_tx, log_rx) = mpsc::channel();
@@ -88,6 +97,7 @@ pub async fn generate_app(database: Database) -> Router {
     // Define the trace layer which handles request/response events
     let trace_layer = TraceLayer::new_for_http()
         //.make_span_with(|request: &Request<_>| {})
+        .make_span_with(DefaultMakeSpan::default().include_headers(true))
         .on_request(move |request: &Request<_>, _span: &Span| {
             if LOGGABLE_METHODS.contains(request.method()) {
                 // If a request does not have an associated user id, mark it as -1
@@ -103,7 +113,17 @@ pub async fn generate_app(database: Database) -> Router {
                     user_id,
                     date_time,
                 );
+                // TODO: More comprehensive logging
+                // This currently logs directly to the console, but might not in the future.
+                // probably should not have two different logs happening here. If logger::log_msg
+                // swapped to logging to a file/db it would probably not be ideal to write to the disk
+                // in this fashion
+                logger::log_msg(&new_task);
+                // This currently collects log data into a buffer which writes to the db every 5 seconds
                 log_tx.send(new_task).unwrap();
+                // The above two are meant to do different things. logger::log() is an internal log which may include
+                // anything the server is doing, the log task is meant to save user request data in a way that users can
+                // query for. Maybe one of these two should be re-named to explain this separation?
             }
         });
     // .on_response(|_response: &Response, _latency: Duration, _span: &Span| {})
@@ -124,13 +144,21 @@ pub async fn generate_app(database: Database) -> Router {
                     ACCEPT,
                     ACCEPT_ENCODING,
                     ACCEPT_LANGUAGE,
+                    CACHE_CONTROL,
                     CONNECTION,
                     DNT,
                     HOST,
                     ORIGIN,
+                    PRAGMA,
                     REFERER,
                     USER_AGENT,
                     CONTENT_TYPE,
+                    UPGRADE,
+                    SEC_WEBSOCKET_ACCEPT,
+                    SEC_WEBSOCKET_EXTENSIONS,
+                    SEC_WEBSOCKET_KEY,
+                    SEC_WEBSOCKET_VERSION,
+                    SEC_WEBSOCKET_PROTOCOL,
                 ])
                 .allow_methods(Any),
         )
@@ -180,10 +208,14 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
-    println!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, generate_app(database).await)
-        .await
-        .unwrap();
+    logger::log_msg(format!("listening on {}", listener.local_addr().unwrap()));
+    let app = generate_app(database).await;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
 
 // TODO: Replace root with something

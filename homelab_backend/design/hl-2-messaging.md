@@ -9,6 +9,7 @@ Support should be added for features common to modern chat applications, includi
 - Bolding
 - Spoiler tags
 - Render blocks marked with triple backticks, ideally with code syntax highlighting
+- Single backtick blocks
 - Emojis
 - Editing an owned message
 - Pinning messages within a chat
@@ -82,9 +83,56 @@ For a direct message, a channel must be created when one user messages another f
 
 For group chats, a user must be able to create a new group and then invite recipients to it.
 
+When a channel is deleted, a task should be generated that deletes all messages associated with it.
+
 ### Attachments
 Attachments can be uploaded when sending a message. Attached media should be deleted from the database when its
 associated message is deleted.
+
+### Websocket Connections
+The server must maintain a connection with a client once it is opened. Data about this connection must be saved, such
+as the ID of the user who opened it. This connection should be closed after a timeout period of inactivity.
+
+There should be some way for the server to bundle and store all open connections with associated data in state and
+keep track of how many are open, there should be a maximum number of connections allowed before the server begins
+rejecting new requests.
+
+### Websocket Packets
+The server will send and receive packets over websocket connections. Clients will send a packet to create a message, the
+server will send packets to clients when there are new messages for them to receive.
+
+```rust
+enum PacketType {
+  ChatMessage,
+}
+
+// Should packets have binary data? Should the enum determine that is in its content?
+struct ReceivePacket {
+  packet_type: PacketType,
+  packet_content: String,
+  destination: String, // ID of the channel this message is meant for
+}
+
+struct SendPacket {
+  packet_status: StatusCode,
+  packet_type: PacketType,
+  packet_content: String,
+  destination: String, // ID of the channel this message is meant for
+}
+```
+
+### Broadcasting
+Messages will need to be broadcast to all relevant clients, an example flow would look like this
+```text
+- User 1 sends a message to channel 1
+  - Channel 1 has 3 subscribers, users 1, 2, and 3
+- The server receives a packet from user 1
+    - Check that user 1 is in channel 1
+    - Create a message in the db
+- The server checks the subscriber list for channel 1
+    - Check if it has an active connection with users 2 and 3
+    - Sends the message to each user with an active connection
+```
 
 ## Frontend
 A messaging section must be added to the application. This section will allow a user to search for other users who they
@@ -95,6 +143,11 @@ When opening a channel, messages in that channel should be retrieved in batches.
 with more being loaded in batches as the user scrolls up through the channel.
 
 A channel should contain a search area so a user can search the channel for given text.
+
+### Websocket Connections
+The client must handle dealing with a connection closing, possibly making a new connection when the user begins using the
+page again. While in active use, maybe the client should send a "heartbeat" or a ping to keep the connection alive.
+Might be worth seeing how other chat applications handle this problem.
 
 ### Rendering a Message
 Text within a message may contain tags, emojis, code blocks, etc. which need special rendering when displaying a message.
@@ -109,6 +162,9 @@ A list of these includes:
   - Render a gif or image if the link directs to one
 - Attachments
   - gifs, images, videos
+- Single backticks
+  - Text enclosed between single backticks should ignore all other render styling and be displayed like an inline block
+  - e.g., `this _text_` will be rendered with underscores rather than the word "text" being italicized
 
 ### Interacting with a message
 All messages should allow for the following interactions:

@@ -31,7 +31,7 @@ pub fn encode_jwt(app_secret: &str, user_id: String, jwt_lifetime: usize) -> Str
     .unwrap()
 }
 
-fn decode_jwt(web_token: &str, app_secret: &str) -> Result<String, String> {
+pub fn decode_jwt(web_token: &str, app_secret: &str) -> Result<String, String> {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.set_required_spec_claims(&["exp", "iat", "sub"]);
     let claims = match decode::<Claims>(
