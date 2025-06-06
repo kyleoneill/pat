@@ -1,4 +1,4 @@
-use super::get_user_from_token;
+use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::models::log::log_db::{db_get_log_by_id, db_get_logs_for_user};
 use crate::models::log::Log;
@@ -22,7 +22,7 @@ async fn get_logs(State(app_state): State<AppState>, headers: HeaderMap) -> Retu
     //       param to specify how many logs are returned.
     // TODO: This should optionally return all logs if the requester provides a flag for "all logs" and is an admin
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -39,7 +39,8 @@ async fn get_log_by_id(
 ) -> ReturnData<Log> {
     let pool = &app_state.db;
     // Get the user here just to auth them, we don't actually need the user data
-    let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let _user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await
+    {
         Ok(user) => user,
         Err(e) => return e.into(),
     };

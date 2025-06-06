@@ -1,11 +1,22 @@
 use mongodb::bson::{doc, Document};
 use mongodb::{Collection, Database};
+use std::fmt::{Display, Formatter};
 
 pub struct LogCreationTask {
     method: String,
     uri: String,
     user_id: String,
     date_time: i64,
+}
+
+impl Display for LogCreationTask {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}: {} {} from {}",
+            self.date_time, self.method, self.uri, self.user_id
+        )
+    }
 }
 
 impl LogCreationTask {

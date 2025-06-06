@@ -1,6 +1,7 @@
 use mongodb::bson::Bson;
 use serde::{Deserialize, Deserializer};
 
+pub mod chat;
 pub mod games;
 pub mod log;
 pub mod reminder;

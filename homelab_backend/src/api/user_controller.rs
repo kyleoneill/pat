@@ -1,4 +1,4 @@
-use super::get_user_from_token;
+use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::models::user::jwt::encode_jwt;
 use crate::models::user::user_db::{db_create_user, db_delete_user, db_get_user_by_username};
@@ -136,11 +136,16 @@ async fn get_user_by_username(
         }
     };
 
-    let user =
-        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
-            Ok(user) => user,
-            Err(e) => return e.into(),
-        };
+    let user = match get_user_from_auth_header(
+        &app_state.db,
+        &headers,
+        &app_state.config.app_secret,
+    )
+    .await
+    {
+        Ok(user) => user,
+        Err(e) => return e.into(),
+    };
 
     // TODO: Should have a general purpose permission handler
     // TODO: Should have a test for this
@@ -161,11 +166,16 @@ async fn get_user_me(
     State(app_state): State<AppState>,
     headers: HeaderMap,
 ) -> ReturnData<ReturnUser> {
-    let user =
-        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
-            Ok(user) => user,
-            Err(e) => return e.into(),
-        };
+    let user = match get_user_from_auth_header(
+        &app_state.db,
+        &headers,
+        &app_state.config.app_secret,
+    )
+    .await
+    {
+        Ok(user) => user,
+        Err(e) => return e.into(),
+    };
     ReturnData::ok(Into::<ReturnUser>::into(user))
 }
 
@@ -174,11 +184,16 @@ async fn delete_user_by_id(
     headers: HeaderMap,
     Path(user_to_delete_id): Path<String>,
 ) -> ReturnData<()> {
-    let user =
-        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
-            Ok(user) => user,
-            Err(e) => return e.into(),
-        };
+    let user = match get_user_from_auth_header(
+        &app_state.db,
+        &headers,
+        &app_state.config.app_secret,
+    )
+    .await
+    {
+        Ok(user) => user,
+        Err(e) => return e.into(),
+    };
 
     // Check if the requester matches the account being deleted, or if they're an admin
     if user.get_id() != user_to_delete_id && user.auth_level != AuthLevel::Admin {
@@ -195,11 +210,16 @@ async fn delete_user_by_id(
 }
 
 async fn delete_user_me(State(app_state): State<AppState>, headers: HeaderMap) -> ReturnData<()> {
-    let user =
-        match get_user_from_token(&app_state.db, &headers, &app_state.config.app_secret).await {
-            Ok(user) => user,
-            Err(e) => return e.into(),
-        };
+    let user = match get_user_from_auth_header(
+        &app_state.db,
+        &headers,
+        &app_state.config.app_secret,
+    )
+    .await
+    {
+        Ok(user) => user,
+        Err(e) => return e.into(),
+    };
 
     // Delete the user
     match db_delete_user(&app_state.db, user.get_id()).await {
