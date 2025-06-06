@@ -99,14 +99,21 @@ rejecting new requests.
 
 ### Websocket Packets
 The server will send and receive packets over websocket connections. Clients will send a packet to create a message, the
-server will send packets to clients when there are new messages for them to receive.
+server will send packets to clients when there are new messages for them to receive. When a client establishes a
+connection to the server, the server should send back an object which has an ID for the newest message in each channel
+the user is subscribed to. This will allow the client to know if there are new messages, and they need to update their
+state.
+
+The server is responsible for providing updates, the client is responsible for populating their history.
 
 ```rust
 enum PacketType {
   ChatMessage,
+  StateSync,
 }
 
-// Should packets have binary data? Should the enum determine that is in its content?
+// Should packets have binary data? Should the enum determine its content type?
+// Ex, for a ChatMessage the content should be a Message
 struct ReceivePacket {
   packet_type: PacketType,
   packet_content: String,
@@ -120,6 +127,10 @@ struct SendPacket {
   destination: String, // ID of the channel this message is meant for
 }
 ```
+
+There should be a way to populate a chat, which is what the `StateSync` packet type stubs. This is for the scenario
+where a user establishes a new websocket connection and must receive N messages for subscribed channels, or if they
+scroll up in a channel/conversation and need to load more messages.
 
 ### Broadcasting
 Messages will need to be broadcast to all relevant clients, an example flow would look like this
