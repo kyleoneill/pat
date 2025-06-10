@@ -1,12 +1,13 @@
+use crate::db::resource_kinds::ResourceKind;
+use crate::error_handler::DbError;
+use mongodb::bson::oid::ObjectId;
 use mongodb::error::ErrorKind;
 use mongodb::{
+    bson::Bson,
     bson::{doc, Document},
     Collection, Database,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
-
-use crate::db::resource_kinds::ResourceKind;
-use crate::error_handler::DbError;
 
 use super::chat_channel::{ChatChannel, CreateChannelSchema};
 
@@ -63,4 +64,38 @@ pub async fn get_chat_channel_by_slug_and_user_id(
         },
         Err(e) => Err(e.into()),
     }
+}
+
+pub async fn get_chat_channel_by_id(pool: &Database, id: &str) -> Result<ChatChannel, DbError> {
+    let collection: Collection<ChatChannel> = pool.collection("chat_channels");
+    let channel_id: ObjectId = match id.parse() {
+        Ok(bson_id) => bson_id,
+        Err(_) => return Err(DbError::BadId),
+    };
+    let filter_doc = doc! {"_id": Bson::ObjectId(channel_id)};
+    match collection.find_one(filter_doc).await {
+        Ok(maybe_record) => match maybe_record {
+            Some(chat_channel) => Ok(chat_channel),
+            None => Err(DbError::NotFound(ResourceKind::ChatChannel, id.to_owned())),
+        },
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub async fn update_chat_channel_by_id(
+    pool: &Database,
+    id: &str,
+    filter_doc: Document,
+    update_doc: Document,
+) -> Result<ChatChannel, DbError> {
+    let collection: Collection<ChatChannel> = pool.collection("chat_channels");
+    match collection.update_one(filter_doc, update_doc).await {
+        Ok(update_res) => {
+            if update_res.matched_count == 0 {
+                return Err(DbError::NotFound(ResourceKind::ChatChannel, id.to_owned()));
+            }
+        }
+        Err(e) => return Err(e.into()),
+    }
+    get_chat_channel_by_id(pool, id).await
 }

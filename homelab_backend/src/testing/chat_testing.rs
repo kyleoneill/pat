@@ -4,9 +4,11 @@ mod chat_testing {
     use crate::testing::TestHelper;
     use hyper::StatusCode;
 
-    use crate::models::chat::chat_channel::{ChannelType, ChatChannel, CreateChannelSchema};
+    use crate::models::chat::chat_channel::{ChannelType, CreateChannelSchema};
 
-    use crate::testing::helpers::chat_helpers::create_chat_channel;
+    use crate::testing::helpers::chat_helpers::{
+        create_chat_channel, subscribe_to_channel, unsubscribe_from_channel,
+    };
 
     /*
       TESTING
@@ -101,5 +103,76 @@ mod chat_testing {
         assert_eq!(third_channel.slug.as_str(), "test_channel");
         assert_eq!(third_channel.subscribers, vec![user_two.id.as_str()]);
         assert_eq!(third_channel.owner_id, user_two.id.as_str());
+
+        // Try to subscribe to a channel that doesn't exist
+        match subscribe_to_channel(client, addr, token.as_str(), token.as_str()).await {
+            Ok(_) => panic!("Subscribing to a non-existent channel should fail"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::NOT_FOUND,
+                "Subscribing to a chat channel that doesn't exist should 404"
+            ),
+        };
+
+        // Subscribe to a channel
+        let subscribed_channel =
+            subscribe_to_channel(client, addr, token.as_str(), third_channel.id.as_str())
+                .await
+                .expect("Failed to subscribe to another users chat channel");
+        assert!(subscribed_channel.subscribers.contains(&user.id));
+
+        // Try to subscribe to a channel the user is already subscribed to
+        match subscribe_to_channel(client, addr, token.as_str(), first_channel.id.as_str()).await {
+            Ok(_) => panic!("Subscribing to a channel already subscribed to should fail"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::NOT_FOUND,
+                "Subscribing to a channel already subscribed to should 404"
+            ),
+        };
+
+        // Try to unsubscribe from a channel that doesn't exist
+        match unsubscribe_from_channel(client, addr, token.as_str(), token.as_str()).await {
+            Ok(_) => panic!("Unsubscribing from a non-existent channel should fail"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::NOT_FOUND,
+                "Unsubscribing from a chat channel that doesn't exist should 404"
+            ),
+        };
+
+        // Unsubscribe from a channel
+        let unsubscribed_channel =
+            unsubscribe_from_channel(client, addr, token.as_str(), third_channel.id.as_str())
+                .await
+                .expect("Failed to unsubscribe from another users chat channel");
+        assert!(!unsubscribed_channel.subscribers.contains(&user.id));
+
+        // Try to unsubscribe from a channel the user is not in
+        match unsubscribe_from_channel(client, addr, token.as_str(), third_channel.id.as_str())
+            .await
+        {
+            Ok(_) => panic!("Unsubscribing from a channel a user is not in should fail"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::NOT_FOUND,
+                "Unsubscribing from a channel a user is not in should 404"
+            ),
+        };
+
+        // Try to unsubscribe from an owned channel, which should fail
+        match unsubscribe_from_channel(client, addr, token.as_str(), first_channel.id.as_str())
+            .await
+        {
+            Ok(_) => panic!("Unsubscribing from an owned channel should fail"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::NOT_FOUND,
+                "Unsubscribing from an owned channel should 404"
+            ),
+        };
+
+        // TODO: Delete channel
+        // TODO: Try to delete a channel not owned by me
     }
 }

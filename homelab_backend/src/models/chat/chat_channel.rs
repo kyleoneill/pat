@@ -1,4 +1,4 @@
-use mongodb::bson::{doc, Bson, Document};
+use mongodb::bson::{doc, Bson};
 
 use super::super::deserialize_id;
 use serde::{Deserialize, Deserializer, Serialize};
