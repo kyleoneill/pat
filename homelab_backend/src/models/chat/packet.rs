@@ -48,3 +48,4 @@ pub enum WebsocketMessage {
 
 // TODO: React to message packet (receive and send)
 // TODO: Pin message packet (receive and send)
+// TODO: ReceiveChatUpdateRequest needs a Send which sends a bundle of messages

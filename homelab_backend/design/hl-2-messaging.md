@@ -51,8 +51,8 @@ struct Attachment {
 
 struct Message {
   id: String,
-  channel_id: String, // id of the channel the message was sent to
-  author: ReturnUser,
+  channel_id: String, // ID of the channel the message was sent to
+  author: String, // ID of the message author
   timestamp: i64,
   edited_timestamp: i64,
   contents: String,
@@ -75,7 +75,7 @@ struct Channel {
   name: Option<String>,
   message_count: i64,
   pinned_messages: Vec<String>,
-  recipients: Vec<String>, // Vec of user IDs
+  subscribers: Vec<String>, // Vec of user IDs subscribed to this channel
 }
 ```
 
@@ -97,15 +97,6 @@ There should be some way for the server to bundle and store all open connections
 keep track of how many are open, there should be a maximum number of connections allowed before the server begins
 rejecting new requests.
 
-### Websocket Packets
-The server will send and receive packets over websocket connections. Clients will send a packet to create a message, the
-server will send packets to clients when there are new messages for them to receive. When a client establishes a
-connection to the server, the server should send back an object which has an ID for the newest message in each channel
-the user is subscribed to. This will allow the client to know if there are new messages, and they need to update their
-state.
-
-The server is responsible for providing updates, the client is responsible for populating their history.
-
 ```rust
 // An active_connections can be added to app state which maintains a list of open connections. The
 // connections can be stored in a hashmap, where the key is the id of the user who opened it
@@ -116,12 +107,21 @@ pub struct AppState {
 }
 ```
 
+### Websocket Packets
+The server will send and receive packets over websocket connections. Clients will send a packet to create a message, the
+server will send packets to clients when there are new messages for them to receive. When a client establishes a
+connection to the server, the server should send back an object which has an ID for the newest message in each channel
+the user is subscribed to. This will allow the client to know if there are new messages, and they need to update their
+state.
+
+The server is responsible for providing updates, the client is responsible for populating their history.
+
 ```rust
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum WebsocketMessage {
   ReceiveChatMessage(CreateMessageSchema),
-  RequestMessage(RequestMessageSchema),
+  ReceiveChatUpdateRequest(RequestMessageSchema),
   ReactToMessage(MessageReactSchema),
   PinMessage(PinMessageSchema),
   SendChatMessage(ChatMessage)
@@ -146,9 +146,8 @@ pub struct RequestMessageSchema {
 }
 ```
 
-There should be a way to populate a chat, which is what the `StateSync` packet type stubs. This is for the scenario
-where a user establishes a new websocket connection and must receive N messages for subscribed channels, or if they
-scroll up in a channel/conversation and need to load more messages.
+There should be a way to populate a chat when a user opens a connection, or to load messages if the user scrolls up in
+a chat. The `ReceiveChatUpdateRequest` packet variant should allow users to request a batch of messages.
 
 ### Broadcasting
 Messages will need to be broadcast to all relevant clients, an example flow would look like this
