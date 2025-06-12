@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::models::log::log_db::{db_get_log_by_id, db_get_logs_for_user};
@@ -10,13 +11,13 @@ use axum::{
     Router,
 };
 
-pub fn log_routes() -> Router<AppState> {
-    Router::<AppState>::new()
+pub fn log_routes() -> Router<Arc<AppState>> {
+    Router::<Arc<AppState>>::new()
         .route("/logs", get(get_logs))
         .route("/logs/:log_id", get(get_log_by_id))
 }
 
-async fn get_logs(State(app_state): State<AppState>, headers: HeaderMap) -> ReturnData<Vec<Log>> {
+async fn get_logs(State(app_state): State<Arc<AppState>>, headers: HeaderMap) -> ReturnData<Vec<Log>> {
     // TODO: This has the potential to return a lot of data. There should be a hard limit for logs
     //       returned, and this endpoint should be paginated / sortable. Should have a query
     //       param to specify how many logs are returned.
@@ -33,7 +34,7 @@ async fn get_logs(State(app_state): State<AppState>, headers: HeaderMap) -> Retu
 }
 
 async fn get_log_by_id(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(log_id): Path<String>,
 ) -> ReturnData<Log> {

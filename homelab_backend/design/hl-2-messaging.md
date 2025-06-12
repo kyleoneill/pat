@@ -107,24 +107,42 @@ state.
 The server is responsible for providing updates, the client is responsible for populating their history.
 
 ```rust
-enum PacketType {
-  ChatMessage,
-  StateSync,
+// An active_connections can be added to app state which maintains a list of open connections. The
+// connections can be stored in a hashmap, where the key is the id of the user who opened it
+pub struct AppState {
+  pub db: Database,
+  pub config: Config,
+  pub active_connections: Mutex<HashMap<String, tokio_mpsc::UnboundedSender<WebsocketMessage>>>
 }
+```
 
-// Should packets have binary data? Should the enum determine its content type?
-// Ex, for a ChatMessage the content should be a Message
-struct ReceivePacket {
-  packet_type: PacketType,
-  packet_content: String,
-  destination: String, // ID of the channel this message is meant for
+```rust
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum WebsocketMessage {
+  ReceiveChatMessage(CreateMessageSchema),
+  RequestMessage(RequestMessageSchema),
+  ReactToMessage(MessageReactSchema),
+  PinMessage(PinMessageSchema),
+  SendChatMessage(ChatMessage)
 }
+/*
+#[serde(tag = "type", content = "data")]
+The above will serialize a SendChatMessage WebsocketMessage to look like
+{
+ "type": "SendChatMessage",
+ "data":{
+  "chat_message_field": "value",
+  // Fields for ChatMessage struct
+ }
+}
+ */
 
-struct SendPacket {
-  packet_status: StatusCode,
-  packet_type: PacketType,
-  packet_content: String,
-  destination: String, // ID of the channel this message is meant for
+pub struct RequestMessageSchema {
+  // When a user requests message history, they can provide some message ID and then a count of messages
+  // which came before it. Maybe this could take a mongo cursor instead, along with a count
+  message_count: i64,
+  starting_message: String,
 }
 ```
 
@@ -135,7 +153,8 @@ scroll up in a channel/conversation and need to load more messages.
 ### Broadcasting
 Messages will need to be broadcast to all relevant clients, an example flow would look like this
 ```text
-- User 1 sends a message to channel 1
+- User 1 sends a message to the server
+  - The message is for channel 1
   - Channel 1 has 3 subscribers, users 1, 2, and 3
 - The server receives a packet from user 1
     - Check that user 1 is in channel 1

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::models::user::jwt::encode_jwt;
@@ -33,12 +34,12 @@ pub fn generate_salt() -> String {
         .collect()
 }
 
-pub fn user_routes() -> Router<AppState> {
+pub fn user_routes() -> Router<Arc<AppState>> {
     // TODO: This routing is not terribly logically consistent and should be re-done
     // Should have a consistent GET/PUT/DELETE for /user/me and /user/:user_id
     //  each should point to their own custom endpoint function that handle the difference between
     //  /me and an id and then call a shared db/business-logic function
-    Router::<AppState>::new()
+    Router::<Arc<AppState>>::new()
         .route("/users", post(create_user))
         .route("/users/auth", post(auth_user))
         .route("/users", get(get_user_by_username))
@@ -50,7 +51,7 @@ pub fn user_routes() -> Router<AppState> {
 // TODO: PUT /users/me and /users/:user_id
 
 async fn auth_user(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     Json(credentials): Json<LoginUserSchema>,
 ) -> ReturnData<String> {
     let pool = &app_state.db;
@@ -77,7 +78,7 @@ async fn auth_user(
 }
 
 async fn create_user(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     Json(credentials): Json<LoginUserSchema>,
 ) -> ReturnData<ReturnUser> {
     let pool = &app_state.db;
@@ -123,7 +124,7 @@ async fn create_user(
 }
 
 async fn get_user_by_username(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     query_params: Query<HashMap<String, String>>,
 ) -> ReturnData<ReturnUser> {
@@ -163,7 +164,7 @@ async fn get_user_by_username(
 }
 
 async fn get_user_me(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> ReturnData<ReturnUser> {
     let user = match get_user_from_auth_header(
@@ -180,7 +181,7 @@ async fn get_user_me(
 }
 
 async fn delete_user_by_id(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(user_to_delete_id): Path<String>,
 ) -> ReturnData<()> {
@@ -209,7 +210,7 @@ async fn delete_user_by_id(
     }
 }
 
-async fn delete_user_me(State(app_state): State<AppState>, headers: HeaderMap) -> ReturnData<()> {
+async fn delete_user_me(State(app_state): State<Arc<AppState>>, headers: HeaderMap) -> ReturnData<()> {
     let user = match get_user_from_auth_header(
         &app_state.db,
         &headers,

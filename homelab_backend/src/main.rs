@@ -1,8 +1,9 @@
 #[macro_use]
 extern crate dotenv_codegen;
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 mod api;
@@ -28,7 +29,14 @@ use axum::http::header::{
 use axum::http::Method;
 use axum::{http::Request, routing::get, Router};
 use hyper::header::UPGRADE;
-use tokio::{task, time};
+use tokio::{
+    task,
+    time,
+    sync::{
+        mpsc as tokio_mpsc,
+        Mutex,
+    },
+};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -41,13 +49,14 @@ use tracing::Span;
 
 use mongodb::Database;
 use tower_http::trace::DefaultMakeSpan;
+use crate::models::chat::packet::WebsocketMessage;
 
 const LOGGABLE_METHODS: [Method; 4] = [Method::GET, Method::PUT, Method::POST, Method::DELETE];
 
-#[derive(Clone)]
 pub struct AppState {
     pub db: Database,
     pub config: Config,
+    pub active_connections: Mutex<HashMap<String, tokio_mpsc::UnboundedSender<WebsocketMessage>>>
 }
 
 #[derive(Debug, Clone)]
@@ -84,7 +93,7 @@ pub async fn generate_app(database: Database) -> Router {
     let handle = database.clone();
 
     // Define the API routes
-    let api_routes = Router::<AppState>::new()
+    let api_routes = Router::<Arc<AppState>>::new()
         .merge(user_controller::user_routes())
         .merge(log_controller::log_routes())
         .merge(reminder_controller::reminder_routes())
@@ -182,11 +191,12 @@ pub async fn generate_app(database: Database) -> Router {
     });
 
     // Create app state and the router
-    let state = AppState {
+    let state = Arc::new(AppState {
         db: database,
         config,
-    };
-    Router::<AppState>::new()
+        active_connections: Mutex::new(HashMap::new()),
+    });
+    Router::<Arc<AppState>>::new()
         // `GET /` goes to `root`
         .route("/", get(root))
         .nest("/api", api_routes)
