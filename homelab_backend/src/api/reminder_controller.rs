@@ -1,4 +1,4 @@
-use super::get_user_from_token;
+use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::AppState;
 use axum::{
@@ -9,6 +9,7 @@ use axum::{
 };
 use axum_extra::extract::Query as ListQuery;
 use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::models::reminder::{
     reminder_db::{
@@ -18,8 +19,8 @@ use crate::models::reminder::{
     Category, CategorySchema, Reminder, ReminderSchema, ReminderUpdateSchema,
 };
 
-pub fn reminder_routes() -> Router<AppState> {
-    Router::<AppState>::new()
+pub fn reminder_routes() -> Router<Arc<AppState>> {
+    Router::<Arc<AppState>>::new()
         // Reminders
         .route("/reminders", post(create_reminder))
         .route("/reminders", get(list_reminders))
@@ -32,12 +33,12 @@ pub fn reminder_routes() -> Router<AppState> {
 }
 
 async fn create_category(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(category_data): Json<CategorySchema>,
 ) -> ReturnData<Category> {
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -48,11 +49,11 @@ async fn create_category(
 }
 
 async fn get_categories(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> ReturnData<Vec<Category>> {
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -63,12 +64,12 @@ async fn get_categories(
 }
 
 async fn delete_category(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(category_id): Path<String>,
 ) -> ReturnData<()> {
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -85,12 +86,12 @@ async fn delete_category(
 }
 
 async fn create_reminder(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(reminder_data): Json<ReminderSchema>,
 ) -> ReturnData<Reminder> {
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -106,14 +107,14 @@ struct ListRemindersQueryParams {
 }
 
 async fn list_reminders(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     query_params: ListQuery<ListRemindersQueryParams>,
 ) -> ReturnData<Vec<Reminder>> {
     // TODO: Pagination
     //       Sort
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -126,13 +127,14 @@ async fn list_reminders(
 // TODO: Get reminder by id
 
 async fn update_reminder(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(reminder_id): Path<String>,
     Json(update_data): Json<ReminderUpdateSchema>,
 ) -> ReturnData<Reminder> {
     let pool = &app_state.db;
-    let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let _user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await
+    {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -143,12 +145,12 @@ async fn update_reminder(
 }
 
 async fn delete_reminder(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(reminder_id): Path<String>,
 ) -> ReturnData<()> {
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };

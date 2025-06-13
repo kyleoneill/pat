@@ -1,4 +1,6 @@
-use super::get_user_from_token;
+use std::sync::Arc;
+
+use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::AppState;
 use axum::{
@@ -13,8 +15,8 @@ use crate::models::games::{
     ConnectionGame, ConnectionGameSchema, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow,
 };
 
-pub fn games_routes() -> Router<AppState> {
-    Router::<AppState>::new()
+pub fn games_routes() -> Router<Arc<AppState>> {
+    Router::<Arc<AppState>>::new()
         .route("/games/connections", post(create_connections))
         .route("/games/connections", get(list_other_connections_games))
         .route("/games/connections/mine", get(list_my_connections_games))
@@ -26,12 +28,12 @@ pub fn games_routes() -> Router<AppState> {
 }
 
 async fn create_connections(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(connection_data): Json<ConnectionGameSchema>,
 ) -> ReturnData<ConnectionGame> {
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -42,13 +44,13 @@ async fn create_connections(
 }
 
 async fn list_my_connections_games(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> ReturnData<Vec<MinimalConnectionsGame>> {
     // TODO: This should be paginated
     // TODO: This and list_other_connections_games should both just call a shared function passing it a true/false
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -65,12 +67,12 @@ async fn list_my_connections_games(
 }
 
 async fn list_other_connections_games(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> ReturnData<Vec<MinimalConnectionsGame>> {
     // TODO: This should be paginated
     let pool = &app_state.db;
-    let user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -87,12 +89,13 @@ async fn list_other_connections_games(
 }
 
 async fn get_game_to_play(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(game_slug): Path<String>,
 ) -> ReturnData<PlayConnectionGame> {
     let pool = &app_state.db;
-    let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let _user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await
+    {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
@@ -103,13 +106,14 @@ async fn get_game_to_play(
 }
 
 async fn try_solve_row(
-    State(app_state): State<AppState>,
+    State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(game_slug): Path<String>,
     Json(row_guess): Json<[String; 4]>,
 ) -> ReturnData<TrySolveRow> {
     let pool = &app_state.db;
-    let _user = match get_user_from_token(pool, &headers, &app_state.config.app_secret).await {
+    let _user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await
+    {
         Ok(user) => user,
         Err(e) => return e.into(),
     };

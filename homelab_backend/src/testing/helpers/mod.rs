@@ -10,6 +10,7 @@ use serde_json::{value::Value, Map};
 use std::fmt;
 use std::net::SocketAddr;
 
+pub mod chat_helpers;
 pub mod games_helpers;
 pub mod log_helpers;
 pub mod reminder_helpers;

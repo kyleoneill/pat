@@ -51,7 +51,7 @@ impl<T> From<DbError> for ReturnData<T> {
                     operation, resource_type
                 ))
             }
-            DbError::BadId => ReturnData::bad_request("The provided ID was not valid".to_owned()),
+            DbError::BadId => ReturnData::not_found("The provided ID was not valid".to_owned()),
             DbError::AuthFailure => {
                 ReturnData::unauthorized("Auth failure while reading database".to_owned())
             }

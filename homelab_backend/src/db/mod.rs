@@ -1,5 +1,6 @@
 pub mod resource_kinds;
 
+use crate::models::chat::chat_channel::ChatChannel;
 use crate::models::games::ConnectionGame;
 use crate::models::reminder::Category;
 use crate::models::user::user_db::db_create_user;
@@ -47,6 +48,7 @@ pub async fn check_indexes(database: &Database) {
     check_user_indexes(database).await;
     check_category_indexes(database).await;
     check_connections_game_indexes(database).await;
+    check_chat_channel_indexes(database).await;
 }
 
 pub async fn check_user_indexes(database: &Database) {
@@ -142,10 +144,10 @@ pub async fn check_connections_game_indexes(database: &Database) {
                 ErrorKind::Command(command_error) => {
                     match command_error.code {
                         26 => create_connections_game_indexes(game_connections_collection).await,
-                        _ => panic!("Failed to list indexes for connections game collection with unknown error during db initialization")
+                        _ => panic!("Failed to list indexes for game_connections collection with unknown error during db initialization")
                     }
                 },
-                _ => panic!("Failed to list indexes for connections game collection with unknown error during db initialization")
+                _ => panic!("Failed to list indexes for game_connections collection with unknown error during db initialization")
             }
         }
     }
@@ -169,5 +171,44 @@ pub async fn create_connections_game_indexes(
     game_connections_collection
         .create_index(category_index)
         .await
-        .expect("Failed to create a slug index on the connections game collection");
+        .expect("Failed to create a slug index on the game_connections collection");
+}
+
+pub async fn check_chat_channel_indexes(database: &Database) {
+    let chat_channels_collection: Collection<ChatChannel> = database.collection("chat_channels");
+
+    match chat_channels_collection.list_index_names().await {
+        Ok(indexes) => {
+            if !indexes.contains(&"slug_and_owner_id".to_owned()) {
+                create_chat_channels_indexes(chat_channels_collection).await;
+            }
+        },
+        Err(e) => {
+            match *e.kind {
+                ErrorKind::Command(command_error) => {
+                    match command_error.code {
+                        26 => create_chat_channels_indexes(chat_channels_collection).await,
+                        _ => panic!("Failed to list indexes for chat_channels collection with unknown error during db initialization")
+                    }
+                },
+                _ => panic!("Failed to list indexes for chat_channels collection with unknown error during db initialization")
+            }
+        }
+    }
+}
+
+pub async fn create_chat_channels_indexes(chat_channels_collection: Collection<ChatChannel>) {
+    // Create a composite index for the slug and owner_id fields, which should be unique
+    let category_index_options = IndexOptions::builder()
+        .unique(true)
+        .name(Some("slug_and_owner_id".to_owned()))
+        .build();
+    let category_index = IndexModel::builder()
+        .keys(doc! {"slug": 1, "owner_id": 1})
+        .options(category_index_options)
+        .build();
+    chat_channels_collection
+        .create_index(category_index)
+        .await
+        .expect("Failed to create a slug_and_owner_id index on the chat_channels collection");
 }
