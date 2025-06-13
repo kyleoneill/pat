@@ -1,6 +1,4 @@
-use mongodb::bson::Bson;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 
 use super::message::{ChatMessage, CreateMessageSchema};
 
@@ -20,7 +18,10 @@ pub struct WebsocketAck {
 
 impl WebsocketAck {
     pub fn new() -> Self {
-        Self { status_code: 0, msg: String::new() }
+        Self {
+            status_code: 0,
+            msg: String::new(),
+        }
     }
     pub fn is_error(&self) -> bool {
         self.status_code >= 400 && self.status_code < 500
@@ -49,3 +50,4 @@ pub enum WebsocketMessage {
 // TODO: React to message packet (receive and send)
 // TODO: Pin message packet (receive and send)
 // TODO: ReceiveChatUpdateRequest needs a Send which sends a bundle of messages
+// TODO: Edit message

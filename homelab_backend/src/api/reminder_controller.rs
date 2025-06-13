@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::AppState;
@@ -10,6 +9,7 @@ use axum::{
 };
 use axum_extra::extract::Query as ListQuery;
 use serde::Deserialize;
+use std::sync::Arc;
 
 use crate::models::reminder::{
     reminder_db::{

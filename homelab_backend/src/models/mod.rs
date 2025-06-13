@@ -21,6 +21,14 @@ where
     }
 }
 
+fn id_to_string(bson: Bson) -> Result<String, &'static str> {
+    match bson {
+        Bson::ObjectId(value) => Ok(value.to_hex()),
+        Bson::String(value) => Ok(value),
+        _ => Err("Bson was not an ObjectId"),
+    }
+}
+
 fn name_to_slug(name: &str) -> String {
     // TODO: This should probably return an error if there are zero valid chars
     //       e.g., "name"  is "" or "!@#$"

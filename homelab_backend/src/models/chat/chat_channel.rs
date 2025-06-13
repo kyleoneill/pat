@@ -17,7 +17,7 @@ pub enum ChannelType {
     Server, // Stub type to support a more featured group chat eventually
 }
 
-fn deserialize<'de, D>(deserializer: D) -> Result<ChannelType, D::Error>
+fn deserialize_channel_type<'de, D>(deserializer: D) -> Result<ChannelType, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -80,7 +80,7 @@ pub struct ChatChannel {
     #[serde(rename = "_id", deserialize_with = "deserialize_id")]
     pub id: String,
     pub slug: String,
-    #[serde(deserialize_with = "deserialize")]
+    #[serde(deserialize_with = "deserialize_channel_type")]
     pub channel_type: ChannelType,
     pub name: Option<String>,
     pub pinned_messages: Vec<String>, // Vec of message IDs

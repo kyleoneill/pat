@@ -7,7 +7,7 @@ mod log_testing;
 mod reminder_testing;
 mod user_testing;
 
-use crate::models::chat::chat_channel::ChatChannel;
+use crate::models::chat::{chat_channel::ChatChannel, message::ChatMessage};
 use crate::models::games::ConnectionGame;
 use crate::models::log::Log;
 use crate::models::reminder::{Category, Reminder};
@@ -71,6 +71,10 @@ impl TestHelper {
         let chat_channels_collection: Collection<ChatChannel> =
             self.database.collection("chat_channels");
         let _res = chat_channels_collection.delete_many(doc! {}).await;
+
+        let chat_messages_collection: Collection<ChatMessage> =
+            self.database.collection("chat_messages");
+        let _res = chat_messages_collection.delete_many(doc! {}).await;
     }
 }
 

@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::models::user::jwt::encode_jwt;
 use crate::models::user::user_db::{db_create_user, db_delete_user, db_get_user_by_username};
 use crate::models::user::{AuthLevel, LoginUserSchema, ReturnUser};
 use crate::AppState;
+use std::sync::Arc;
 
 use axum::{
     extract::{Path, Query, State},
@@ -210,7 +210,10 @@ async fn delete_user_by_id(
     }
 }
 
-async fn delete_user_me(State(app_state): State<Arc<AppState>>, headers: HeaderMap) -> ReturnData<()> {
+async fn delete_user_me(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> ReturnData<()> {
     let user = match get_user_from_auth_header(
         &app_state.db,
         &headers,

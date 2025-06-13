@@ -1,19 +1,18 @@
 use super::{get_user_from_auth_header, get_user_from_token};
 use crate::api::return_data::ReturnData;
+use crate::error_handler::DbError;
 use crate::models::chat::{
     chat_channel::{ChatChannel, CreateChannelSchema},
-    chat_channel_db::{insert_chat_channel, update_chat_channel_by_id, get_chat_channel_by_id},
-    packet::{
-        WebsocketMessage,
-        WebsocketAck,
-    },
+    chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, update_chat_channel_by_id},
+    message_db::insert_chat_message,
+    packet::{WebsocketAck, WebsocketMessage},
 };
 use crate::{logger, AppState};
 use axum::{
     body::Body,
     extract::{
         connect_info::ConnectInfo,
-        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
+        ws::{Message, WebSocket, WebSocketUpgrade},
         Query, State,
     },
     http::{header::HeaderMap, Response, StatusCode},
@@ -21,14 +20,13 @@ use axum::{
     routing::{get, post, put},
     Json, Router,
 };
-use tokio::sync::mpsc;
-use serde::{Deserialize, Deserializer, Serialize};
-use std::net::SocketAddr;
-use std::sync::Arc;
 use futures::{SinkExt, StreamExt};
-use crate::error_handler::DbError;
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{doc, Bson, Document};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::sync::mpsc;
 
 pub fn chat_routes() -> Router<Arc<AppState>> {
     Router::<Arc<AppState>>::new()
@@ -156,9 +154,6 @@ async fn chat_connect(
     query_params: Query<ChatConnectQueryParams>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
-    // TODO: Having the auth token in the request causes it to be logged, which is not ideal
-    //       Maybe have the logger check for this specific query_param and replace it with '<redacted>'
-    //       or something
     let pool = &app_state.db;
     let user = match get_user_from_token(
         pool,
@@ -183,26 +178,26 @@ async fn chat_connect(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, user.get_id(), app_state))
 }
 
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr, user_id: String, app_state: Arc<AppState>) {
-    /*
-        - While true, read bytes
-        - When done reading bytes, determine what kind of packet we have
-            - The first byte will determine the packet type
-        - Deserialize the bytes into our packet
-        - Handle the packet
-     */
+async fn handle_socket(
+    mut socket: WebSocket,
+    who: SocketAddr,
+    user_id: String,
+    app_state: Arc<AppState>,
+) {
     // Create a channel to send messages
     let (tx, mut rx) = mpsc::unbounded_channel::<WebsocketMessage>();
-    
+
     // Register the connection
     {
-        let mut connections = app_state.active_connections.lock().await;
-        
+        let mut connections = app_state.active_connections.write().await;
+
         // Check if this user already has a connection
         if connections.contains_key(user_id.as_str()) {
-            connections.remove(user_id.as_str()).expect("Hashmap should contain a value when .contains_key was true");
+            connections
+                .remove(user_id.as_str())
+                .expect("Hashmap should contain a value when .contains_key was true");
         }
-        
+
         connections.insert(user_id.clone(), tx);
     }
 
@@ -211,7 +206,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, user_id: String, 
     // TODO: Response to connection being established - send most recent message id in subscribed channels?
 
     // Spawn a task to receive messages from the socket
-    let cloned_user_id = user_id.clone();
+    let user_id_read_task = user_id.clone();
     let cloned_state = app_state.clone();
     let read_task = tokio::spawn(async move {
         // Axum and the client will handle transmitting a heartbeat, so this will always return a Some
@@ -221,50 +216,82 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, user_id: String, 
             // and then matching on maybe_errd_msg to handle the non-fatal-error myself, but that might not matter for
             // a simple chat app. As is currently written, a non-fatal-error will cause the `while let` to fail,
             // ending the while loop and then the async block
-            
-            // TODO: MATCH HERE INSTEAD OF IF_LET AND THEN HANDLE MESSAGE::CLOSE
+
+            // TODO: Should I match here instead of using an if_let to handle binary data or a Close?
             if let Message::Text(text) = msg {
                 match serde_json::from_str::<WebsocketMessage>(text.as_str()) {
                     Ok(WebsocketMessage::ReceiveChatMessage(msg_to_create)) => {
+                        // Can this be made more readable
+
                         // Construct a response that will be sent to the client which sent this request
                         let mut ack = WebsocketAck::new();
 
                         // Verify that the message is being sent to a valid channel that the sender is in
-                        let channel_id = msg_to_create.channel_id;
-                        match get_chat_channel_by_id(&cloned_state.db, channel_id.as_str()).await {
+                        let channel_id = msg_to_create.channel_id.as_str();
+                        match get_chat_channel_by_id(&cloned_state.db, channel_id).await {
                             Ok(channel) => {
                                 // Verify that the current user is a subscriber of the channel
-                                // Create a db entry for this message
-                                // Check active connections to see if any subscribers to the channel are connected
-                                // for each connected user, get their tx and send a SendChatMessage to it
-                            },
+                                if channel.subscribers.contains(&user_id_read_task) {
+                                    // Create a db entry for this message
+                                    match insert_chat_message(
+                                        &cloned_state.db,
+                                        msg_to_create,
+                                        user_id_read_task.as_str(),
+                                    )
+                                    .await
+                                    {
+                                        Ok(chat_message) => {
+                                            // Check to see if any subscribers of the destination channel have active connections
+                                            for subscriber in channel.subscribers {
+                                                if let Some(tx) = (&cloned_state)
+                                                    .active_connections
+                                                    .read()
+                                                    .await
+                                                    .get(subscriber.as_str())
+                                                {
+                                                    let _ =
+                                                        tx.send(WebsocketMessage::SendChatMessage(
+                                                            chat_message.clone(),
+                                                        ));
+                                                }
+                                            }
+                                            ack.status_code = 200;
+                                            ack.msg.push_str(&format!(
+                                                "Created chat message with ID {}",
+                                                chat_message.id
+                                            ));
+                                        }
+                                        Err(_) => {
+                                            ack.status_code = 500;
+                                            ack.msg.push_str("Failed to create a chat message with an unknown reason");
+                                        }
+                                    }
+                                } else {
+                                    ack.status_code = 400;
+                                    ack.msg.push_str("You are not in this chat channel");
+                                }
+                            }
                             Err(_) => {
                                 // TODO: Actual error handling
-                                ack.status_code = 0;
+                                //       Also the way `ack` is being build here sucks. Status should be
+                                //       using an enum, this should probably be set in a mut ref method like
+                                //       fn set_act(&mut self, status: Status, msg: &str)
+                                ack.status_code = 404;
                                 ack.msg.push_str("Chat channel does not exist");
                             }
                         }
 
                         // Send the ack to the client who sent this request
-                        let connections = cloned_state.active_connections.lock().await;
-                        match connections.get(cloned_user_id.as_str()) {
+                        let connections = cloned_state.active_connections.read().await;
+                        match connections.get(user_id_read_task.as_str()) {
                             Some(tx) => {
                                 let _ = tx.send(WebsocketMessage::SendAck(ack));
-                            },
+                            }
                             None => {
                                 // Currently active connection is gone, log this?
-                            },
+                            }
                         };
-
-
-                        // TEMP EXAMPLE OF WHAT THIS LOOKS LIKE
-                        // let connections = state_clone.connections.lock().await;
-                        // for (uid, tx) in connections.iter() {
-                        //     if *uid != user_id {
-                        //         let _ = tx.send(WebSocketMessage::ChatMessage(chat_msg.clone()));
-                        //     }
-                        // }
-                    },
+                    }
                     Ok(WebsocketMessage::ReceiveChatUpdateRequest(msg_request)) => {
                         // Get messages from db
                         // Send messages to the requestor
@@ -274,56 +301,39 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, user_id: String, 
                         // if let Some(tx) = connections.get(&user_id) {
                         //     let _ = tx.send(history);
                         // }
-                    },
+                    }
                     Ok(WebsocketMessage::SendChatMessage(_)) => {
                         // This should never be received, this variant is meant to be sent
-                    },
+                    }
                     Ok(WebsocketMessage::SendAck(_)) => {
                         // This should never be received, this variant is meant to be sent
-                    },
+                    }
                     Err(_e) => {
                         // TODO: Handle error
                         //       Send a SendErrorMessage to tx?
-                        logger::log_msg("Error while deserializing a websocket packet from a string");
+                        logger::log_msg(
+                            "Error while deserializing a websocket packet from a string",
+                        );
                     }
                 }
             }
         }
 
         // Clean up on disconnect
-        cloned_state.active_connections.lock().await.remove(cloned_user_id.as_str());
+        cloned_state
+            .active_connections
+            .write()
+            .await
+            .remove(user_id_read_task.as_str());
     });
 
     // Spawn a task to send messages to the socket
     let write_task = tokio::spawn(async move {
         while let Some(msg) = rx.recv().await {
-            // if msg is SendChatMessage
-            //  - get subscribers from the channel
-            //  - for each subscriber
-            //    - if user_id in active_connections
-            //      - send message to that connection
-            // other response types
-            //  - SendErrorMessage
-            match msg {
-                WebsocketMessage::ReceiveChatMessage(_) => {
-                    // Should not occur
-                },
-                WebsocketMessage::ReceiveChatUpdateRequest(_) => {
-                    // Should not occur
-                },
-                WebsocketMessage::SendChatMessage(message_to_send) => {
-                    // TODO: SEND MESSAGE
-                },
-                WebsocketMessage::SendAck(ack) => {
-                    // TODO: SEND ACK
-                },
-            }
-
-            // this should be moved into WebSocketMessage specific variant handling
             if let Ok(text) = serde_json::to_string(&msg) {
                 if sender.send(Message::Text(text)).await.is_err() {
                     // TODO: HANDLE ERROR HERE
-                    logger::log_msg("Error while sending a message to a sender");
+                    logger::log_msg("Error while sending a WebsocketMessage to a sender");
                 }
             }
         }
@@ -335,7 +345,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, user_id: String, 
     // macro blocks the task running this function until either the read or write task is resolved.
     // When one is resolved the other is cancelled and execution of the task running this function
     // continues, hitting the cleanup and then ending
-    
+
     // Wait until either task finishes, cancel the remaining one
     tokio::select! {
         _ = read_task => {},
@@ -343,5 +353,9 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr, user_id: String, 
     }
 
     // Cleanup, in case the write_task is closed before the read_task
-    app_state.active_connections.lock().await.remove(user_id.as_str());
+    app_state
+        .active_connections
+        .write()
+        .await
+        .remove(user_id.as_str());
 }

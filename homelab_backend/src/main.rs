@@ -13,6 +13,7 @@ mod logger;
 mod models;
 mod tasks;
 mod testing;
+pub mod util;
 
 use models::user::jwt::get_and_decode_auth_token;
 
@@ -30,12 +31,8 @@ use axum::http::Method;
 use axum::{http::Request, routing::get, Router};
 use hyper::header::UPGRADE;
 use tokio::{
-    task,
-    time,
-    sync::{
-        mpsc as tokio_mpsc,
-        Mutex,
-    },
+    sync::{mpsc as tokio_mpsc, RwLock},
+    task, time,
 };
 use tower::ServiceBuilder;
 use tower_http::{
@@ -47,16 +44,20 @@ use tower_http::{
 
 use tracing::Span;
 
+use crate::models::chat::packet::WebsocketMessage;
 use mongodb::Database;
 use tower_http::trace::DefaultMakeSpan;
-use crate::models::chat::packet::WebsocketMessage;
 
 const LOGGABLE_METHODS: [Method; 4] = [Method::GET, Method::PUT, Method::POST, Method::DELETE];
 
 pub struct AppState {
     pub db: Database,
     pub config: Config,
-    pub active_connections: Mutex<HashMap<String, tokio_mpsc::UnboundedSender<WebsocketMessage>>>
+    // RwLock is potentially bad to use here in the scenario where there are many connects and
+    // disconnects are being made, maybe 400k users for a 4GHz processor. App state will lock every
+    // single time there is a connect/disconnect and prevent processing messages being sent while
+    // active_connections is being updated
+    pub active_connections: RwLock<HashMap<String, tokio_mpsc::UnboundedSender<WebsocketMessage>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -194,7 +195,7 @@ pub async fn generate_app(database: Database) -> Router {
     let state = Arc::new(AppState {
         db: database,
         config,
-        active_connections: Mutex::new(HashMap::new()),
+        active_connections: RwLock::new(HashMap::new()),
     });
     Router::<Arc<AppState>>::new()
         // `GET /` goes to `root`
