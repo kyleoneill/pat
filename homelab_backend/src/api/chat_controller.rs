@@ -3,7 +3,7 @@ use crate::api::return_data::ReturnData;
 use crate::error_handler::DbError;
 use crate::models::chat::{
     chat_channel::{ChatChannel, CreateChannelSchema},
-    chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, update_chat_channel_by_id},
+    chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, update_chat_channel_by_id, list_chat_channels},
     message_db::insert_chat_message,
     packet::{WebsocketAck, WebsocketMessage},
 };
@@ -31,9 +31,10 @@ use tokio::sync::mpsc;
 pub fn chat_routes() -> Router<Arc<AppState>> {
     Router::<Arc<AppState>>::new()
         .route("/chat/ws", get(chat_connect))
-        .route("/chat/channel", post(create_channel))
-        .route("/chat/channel/subscribe", put(channel_subscribe))
-        .route("/chat/channel/unsubscribe", put(channel_unsubscribe))
+        .route("/chat/channels", post(create_channel))
+        .route("/chat/channels", get(list_channels))
+        .route("/chat/channels/subscribe", put(channel_subscribe))
+        .route("/chat/channels/unsubscribe", put(channel_unsubscribe))
 }
 
 async fn create_channel(
@@ -142,6 +143,43 @@ async fn channel_unsubscribe(
     }
 }
 
+#[derive(Deserialize)]
+struct ListChannelsQueryParams {
+    my_channels: Option<bool>,
+    all_channels: Option<bool>,
+}
+
+async fn list_channels(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    query_params: Query<ListChannelsQueryParams>,
+) -> ReturnData<Vec<ChatChannel>> {
+    let pool = &app_state.db;
+    let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
+        Ok(user) => user,
+        Err(e) => return e.into(),
+    };
+    let user_id = user.get_id();
+    let filter_doc = {
+        if query_params.all_channels.is_some() && query_params.all_channels.unwrap() {
+            // Get all channels
+            doc! {}
+        }
+        else if query_params.my_channels.is_some() && query_params.my_channels.unwrap() {
+            // Get channels owned by the requester
+            doc! {"owner_id": user_id.clone()}
+        }
+        else {
+            // Get channels not owned by the requester
+            doc! {"owner_id": {"$ne": user_id.clone()}}
+        }
+    };
+    match list_chat_channels(pool, filter_doc).await {
+        Ok(channels) => ReturnData::ok(channels),
+        Err(db_err) => db_err.into()
+    }
+}
+
 // WEBSOCKET
 #[derive(Deserialize, Debug)]
 struct ChatConnectQueryParams {
@@ -179,8 +217,8 @@ async fn chat_connect(
 }
 
 async fn handle_socket(
-    mut socket: WebSocket,
-    who: SocketAddr,
+    socket: WebSocket,
+    _who: SocketAddr,
     user_id: String,
     app_state: Arc<AppState>,
 ) {

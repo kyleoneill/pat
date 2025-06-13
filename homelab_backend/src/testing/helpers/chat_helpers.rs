@@ -1,4 +1,4 @@
-use crate::testing::helpers::{post_request, put_request};
+use crate::testing::helpers::{get_request, post_request, put_request};
 use axum::body::Body;
 use axum::http::StatusCode;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -15,7 +15,7 @@ pub async fn create_chat_channel(
     chat_channel: &CreateChannelSchema,
 ) -> Result<ChatChannel, (StatusCode, String)> {
     let data = json!(chat_channel);
-    post_request(client, "/chat/channel", data, Some(token), addr).await
+    post_request(client, "/chat/channels", data, Some(token), addr).await
 }
 
 pub async fn subscribe_to_channel(
@@ -25,7 +25,7 @@ pub async fn subscribe_to_channel(
     channel_id: &str,
 ) -> Result<ChatChannel, (StatusCode, String)> {
     let data = json!({"channel_id": channel_id});
-    put_request(client, "/chat/channel/subscribe", data, token, addr).await
+    put_request(client, "/chat/channels/subscribe", data, token, addr).await
 }
 
 pub async fn unsubscribe_from_channel(
@@ -35,5 +35,16 @@ pub async fn unsubscribe_from_channel(
     channel_id: &str,
 ) -> Result<ChatChannel, (StatusCode, String)> {
     let data = json!({"channel_id": channel_id});
-    put_request(client, "/chat/channel/unsubscribe", data, token, addr).await
+    put_request(client, "/chat/channels/unsubscribe", data, token, addr).await
+}
+
+pub async fn list_channels(
+    client: &Client<HttpConnector, Body>,
+    addr: &SocketAddr,
+    token: &str,
+    all_channels: bool,
+    my_channels: bool,
+) -> Result<Vec<ChatChannel>, (StatusCode, String)> {
+    let path = format!("/chat/channels?all_channels={}&my_channels={}", all_channels, my_channels);
+    get_request(client, path.as_str(), token, addr).await
 }

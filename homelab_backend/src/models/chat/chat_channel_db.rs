@@ -8,7 +8,7 @@ use mongodb::{
     Collection, Database,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
-
+use futures::TryStreamExt;
 use super::chat_channel::{ChatChannel, CreateChannelSchema};
 
 pub async fn insert_chat_channel(
@@ -98,4 +98,18 @@ pub async fn update_chat_channel_by_id(
         Err(e) => return Err(e.into()),
     }
     get_chat_channel_by_id(pool, id).await
+}
+
+pub async fn list_chat_channels(
+    pool: &Database,
+    filter_doc: Document,
+) -> Result<Vec<ChatChannel>, DbError> {
+    let collection: Collection<ChatChannel> = pool.collection("chat_channels");
+    match collection.find(filter_doc).await {
+        Ok(cursor) => match cursor.try_collect().await {
+            Ok(res) => Ok(res),
+            Err(e) => Err(e.into())
+        },
+        Err(e) => Err(e.into())
+    }
 }

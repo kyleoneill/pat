@@ -7,7 +7,7 @@ mod chat_testing {
     use crate::models::chat::chat_channel::{ChannelType, CreateChannelSchema};
 
     use crate::testing::helpers::chat_helpers::{
-        create_chat_channel, subscribe_to_channel, unsubscribe_from_channel,
+        create_chat_channel, subscribe_to_channel, unsubscribe_from_channel, list_channels,
     };
 
     /*
@@ -171,7 +171,22 @@ mod chat_testing {
                 "Unsubscribing from an owned channel should 404"
             ),
         };
-
+        
+        // List all channels
+        let all_channels = list_channels(client, addr, token.as_str(), true, true).await.expect("Failed to list all chat channels");
+        assert_eq!(all_channels.len(), 3);
+        
+        // List my channels
+        let my_channels = list_channels(client, addr, token.as_str(), false, true).await.expect("Failed to list my chat channels");
+        assert_eq!(my_channels.len(), 2);
+        assert_eq!(my_channels[0].owner_id, user.id);
+        assert_eq!(my_channels[1].owner_id, user.id);
+        
+        // List other channels
+        let other_channels = list_channels(client, addr, token.as_str(), false, false).await.expect("Failed to list other chat channels");
+        assert_eq!(other_channels.len(), 1);
+        assert_eq!(other_channels[0].owner_id, user_two.id);
+        
         // TODO: Delete channel
         // TODO: Try to delete a channel not owned by me
     }
