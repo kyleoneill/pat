@@ -23,22 +23,13 @@ pub fn encode_jwt(app_secret: &str, user_id: String, jwt_lifetime: usize) -> Str
         sub: user_id,
     };
     // We are using the default Header algorithm so this should be infallible
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(app_secret.as_bytes()),
-    )
-    .unwrap()
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(app_secret.as_bytes())).unwrap()
 }
 
-fn decode_jwt(web_token: &str, app_secret: &str) -> Result<String, String> {
+pub fn decode_jwt(web_token: &str, app_secret: &str) -> Result<String, String> {
     let mut validation = Validation::new(Algorithm::HS256);
     validation.set_required_spec_claims(&["exp", "iat", "sub"]);
-    let claims = match decode::<Claims>(
-        web_token,
-        &DecodingKey::from_secret(app_secret.as_bytes()),
-        &validation,
-    ) {
+    let claims = match decode::<Claims>(web_token, &DecodingKey::from_secret(app_secret.as_bytes()), &validation) {
         Ok(c) => c,
         Err(err) => {
             let err_msg = match *err.kind() {

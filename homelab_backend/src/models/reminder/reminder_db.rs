@@ -12,11 +12,7 @@ use mongodb::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // Categories
-pub async fn insert_category(
-    pool: &Database,
-    data: &CategorySchema,
-    user_id: String,
-) -> Result<Category, DbError> {
+pub async fn insert_category(pool: &Database, data: &CategorySchema, user_id: String) -> Result<Category, DbError> {
     let collection: Collection<Document> = pool.collection("categories");
     let doc = doc! {
         "slug": data.slug.clone(),
@@ -27,10 +23,7 @@ pub async fn insert_category(
         Ok(_res) => (),
         Err(e) => {
             return match *e.kind {
-                ErrorKind::Write(_) => Err(DbError::AlreadyExists(
-                    ResourceKind::ReminderCategory,
-                    data.slug.clone(),
-                )),
+                ErrorKind::Write(_) => Err(DbError::AlreadyExists(ResourceKind::ReminderCategory, data.slug.clone())),
                 _ => Err(e.into()),
             }
         }
@@ -38,10 +31,7 @@ pub async fn insert_category(
     get_category_by_slug(pool, &data.slug).await
 }
 
-pub async fn get_categories_for_user(
-    pool: &Database,
-    user_id: String,
-) -> Result<Vec<Category>, DbError> {
+pub async fn get_categories_for_user(pool: &Database, user_id: String) -> Result<Vec<Category>, DbError> {
     let collection: Collection<Category> = pool.collection("categories");
     let doc = doc! { "user_id": user_id };
     match collection.find(doc).await {
@@ -59,20 +49,13 @@ pub async fn get_category_by_slug(pool: &Database, slug: &str) -> Result<Categor
     match collection.find_one(doc).await {
         Ok(maybe_record) => match maybe_record {
             Some(category) => Ok(category),
-            None => Err(DbError::NotFound(
-                ResourceKind::ReminderCategory,
-                slug.to_owned(),
-            )),
+            None => Err(DbError::NotFound(ResourceKind::ReminderCategory, slug.to_owned())),
         },
         Err(e) => Err(e.into()),
     }
 }
 
-pub async fn delete_category_by_id(
-    pool: &Database,
-    category_id: String,
-    user_id: String,
-) -> Result<u64, DbError> {
+pub async fn delete_category_by_id(pool: &Database, category_id: String, user_id: String) -> Result<u64, DbError> {
     // Verify that the category being deleted is not in use by a reminder
     let reminder_collection: Collection<Reminder> = pool.collection("reminders");
     let doc = doc! { "categories": category_id.clone() };
@@ -82,10 +65,7 @@ pub async fn delete_category_by_id(
     match reminder_collection.find(doc).await {
         Ok(mut cursor) => {
             if cursor.next().await.is_some() {
-                return Err(DbError::RelationshipViolation(
-                    ResourceKind::ReminderCategory,
-                    category_id.clone(),
-                ));
+                return Err(DbError::RelationshipViolation(ResourceKind::ReminderCategory, category_id.clone()));
             }
         }
         Err(e) => return Err(e.into()),
@@ -105,16 +85,9 @@ pub async fn delete_category_by_id(
 }
 
 // Reminders
-pub async fn insert_reminder(
-    pool: &Database,
-    data: &ReminderSchema,
-    user_id: String,
-) -> Result<Reminder, DbError> {
+pub async fn insert_reminder(pool: &Database, data: &ReminderSchema, user_id: String) -> Result<Reminder, DbError> {
     let serialized_priority = data.priority as i64;
-    let date_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+    let date_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
     // TODO: Verify that all category IDs exist
 
@@ -131,11 +104,7 @@ pub async fn insert_reminder(
     let new_doc_id = match reminder_collection.insert_one(doc).await {
         Ok(res) => match res.inserted_id {
             Bson::ObjectId(id) => id.to_string(),
-            _ => {
-                return Err(DbError::UnhandledException(
-                    "Failed to insert a new reminder".to_owned(),
-                ))
-            }
+            _ => return Err(DbError::UnhandledException("Failed to insert a new reminder".to_owned())),
         },
         Err(e) => return Err(e.into()),
     };
@@ -163,11 +132,7 @@ pub async fn get_reminder_by_id(pool: &Database, id: String) -> Result<Reminder,
     }
 }
 
-pub async fn get_reminders_for_user(
-    pool: &Database,
-    user_id: String,
-    maybe_categories: Option<Vec<String>>,
-) -> Result<Vec<Reminder>, DbError> {
+pub async fn get_reminders_for_user(pool: &Database, user_id: String, maybe_categories: Option<Vec<String>>) -> Result<Vec<Reminder>, DbError> {
     let reminder_collection: Collection<Reminder> = pool.collection("reminders");
     let mut doc = doc! {"user_id": user_id};
 
@@ -185,11 +150,7 @@ pub async fn get_reminders_for_user(
     }
 }
 
-pub async fn db_update_reminder(
-    pool: &Database,
-    reminder_id: String,
-    updates: ReminderUpdateSchema,
-) -> Result<Reminder, DbError> {
+pub async fn db_update_reminder(pool: &Database, reminder_id: String, updates: ReminderUpdateSchema) -> Result<Reminder, DbError> {
     let reminder_collection: Collection<Reminder> = pool.collection("reminders");
     let mut doc = Document::new();
 
@@ -217,10 +178,7 @@ pub async fn db_update_reminder(
     let filter_doc = doc! { "_id": Bson::ObjectId(bson_id) };
 
     if doc.is_empty() {
-        return Err(DbError::EmptyDbExpression(
-            ResourceKind::Reminder,
-            "updating".to_owned(),
-        ));
+        return Err(DbError::EmptyDbExpression(ResourceKind::Reminder, "updating".to_owned()));
     }
 
     let update_doc = doc! { "$set": doc};
@@ -232,11 +190,7 @@ pub async fn db_update_reminder(
     get_reminder_by_id(pool, reminder_id).await
 }
 
-pub async fn db_delete_reminder(
-    pool: &Database,
-    reminder_id: String,
-    user_id: String,
-) -> Result<u64, DbError> {
+pub async fn db_delete_reminder(pool: &Database, reminder_id: String, user_id: String) -> Result<u64, DbError> {
     let reminder_collection: Collection<Reminder> = pool.collection("reminders");
     let reminder_bson_id: ObjectId = match reminder_id.parse() {
         Ok(bson_id) => bson_id,

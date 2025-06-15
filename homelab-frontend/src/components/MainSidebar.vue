@@ -9,6 +9,7 @@ import { RouterLink } from 'vue-router'
         <li><RouterLink to="/">Home</RouterLink></li>
         <li><RouterLink to="/reminders">Reminders</RouterLink></li>
         <li><RouterLink to="/games/connections">Connections</RouterLink></li>
+        <li><RouterLink to="/chat">Chat</RouterLink></li>
         <li><a @click="$emit('logout')">Logout</a></li>
       </ul>
     </nav>

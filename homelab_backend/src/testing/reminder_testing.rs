@@ -2,8 +2,7 @@
 mod reminder_testing {
     use crate::models::reminder::{Priority, ReminderUpdateSchema};
     use crate::testing::helpers::reminder_helpers::{
-        create_category, create_reminder, delete_category_by_id, delete_reminder_helper,
-        get_categories, list_reminders, update_reminder_helper,
+        create_category, create_reminder, delete_category_by_id, delete_reminder_helper, get_categories, list_reminders, update_reminder_helper,
     };
     use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
     use crate::testing::TestHelper;
@@ -28,25 +27,13 @@ mod reminder_testing {
         let user = get_user_me(client, token.as_str(), addr).await.unwrap();
 
         // Create two categories
-        let created_category = create_category(
-            client,
-            token.as_str(),
-            "test_category",
-            "test_category",
-            addr,
-        )
-        .await
-        .expect("Failed to create a new category");
+        let created_category = create_category(client, token.as_str(), "test_category", "test_category", addr)
+            .await
+            .expect("Failed to create a new category");
 
-        let second_category = create_category(
-            client,
-            token.as_str(),
-            "second_category",
-            "second_category",
-            addr,
-        )
-        .await
-        .expect("Failed to create a second new category");
+        let second_category = create_category(client, token.as_str(), "second_category", "second_category", addr)
+            .await
+            .expect("Failed to create a second new category");
 
         // Try to create a reminder that points to a category that does not exist
         // TODO: Implement this check
@@ -72,8 +59,7 @@ mod reminder_testing {
         assert_eq!(created_reminder.user_id, user.id);
 
         // Try to delete a category used by a reminder
-        match delete_category_by_id(client, token.as_str(), addr, created_category.id.clone()).await
-        {
+        match delete_category_by_id(client, token.as_str(), addr, created_category.id.clone()).await {
             Ok(_) => panic!("Should not be able to delete a category linked to a reminder"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -104,39 +90,24 @@ mod reminder_testing {
         assert_eq!(reminders[1], second_reminder);
 
         // List all reminders which use the first category
-        let list_filter_to_first_category = list_reminders(
-            client,
-            addr,
-            token.as_str(),
-            Some(vec![created_category.id.clone()]),
-        )
-        .await
-        .expect("Failed to get a list of reminders filtered to one category");
+        let list_filter_to_first_category = list_reminders(client, addr, token.as_str(), Some(vec![created_category.id.clone()]))
+            .await
+            .expect("Failed to get a list of reminders filtered to one category");
         assert_eq!(list_filter_to_first_category.len(), 2);
         assert_eq!(list_filter_to_first_category[0], created_reminder);
         assert_eq!(list_filter_to_first_category[1], second_reminder);
 
         // List all reminders which use the second category
-        let list_filter_to_second_category = list_reminders(
-            client,
-            addr,
-            token.as_str(),
-            Some(vec![second_category.id.clone()]),
-        )
-        .await
-        .expect("Failed to get a list of reminders filtered to one category");
+        let list_filter_to_second_category = list_reminders(client, addr, token.as_str(), Some(vec![second_category.id.clone()]))
+            .await
+            .expect("Failed to get a list of reminders filtered to one category");
         assert_eq!(list_filter_to_second_category.len(), 1);
         assert_eq!(list_filter_to_second_category[0], created_reminder);
 
         // List all reminders which use a category that doesn't exist
-        let list_filter_to_unused_category = list_reminders(
-            client,
-            addr,
-            token.as_str(),
-            Some(vec!["aaaaaaaaaaaaaaaaaaaaaaaa".to_string()]),
-        )
-        .await
-        .expect("Failed to get a list of reminders filtered to a category that does not exist");
+        let list_filter_to_unused_category = list_reminders(client, addr, token.as_str(), Some(vec!["aaaaaaaaaaaaaaaaaaaaaaaa".to_string()]))
+            .await
+            .expect("Failed to get a list of reminders filtered to a category that does not exist");
         assert_eq!(list_filter_to_unused_category.len(), 0);
 
         // Try to update a reminder with no data, which should fail
@@ -146,15 +117,7 @@ mod reminder_testing {
             categories: None,
             priority: None,
         };
-        match update_reminder_helper(
-            client,
-            addr,
-            token.as_str(),
-            reminders[0].id.clone(),
-            bad_update_data,
-        )
-        .await
-        {
+        match update_reminder_helper(client, addr, token.as_str(), reminders[0].id.clone(), bad_update_data).await {
             Ok(_) => panic!("Updating a category with no update data should fail."),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -170,20 +133,11 @@ mod reminder_testing {
             categories: None,
             priority: None,
         };
-        let update_reminder_res = update_reminder_helper(
-            client,
-            addr,
-            token.as_str(),
-            reminders[0].id.clone(),
-            update_data,
-        )
-        .await
-        .expect("Failed to update a reminder");
+        let update_reminder_res = update_reminder_helper(client, addr, token.as_str(), reminders[0].id.clone(), update_data)
+            .await
+            .expect("Failed to update a reminder");
         assert_eq!(update_reminder_res.name.as_str(), reminder_name);
-        assert_eq!(
-            update_reminder_res.description.as_str(),
-            "This is a new description"
-        );
+        assert_eq!(update_reminder_res.description.as_str(), "This is a new description");
 
         // Update a reminder while changing both the name and categories fields
         let multiple_updates = ReminderUpdateSchema {
@@ -192,15 +146,9 @@ mod reminder_testing {
             categories: Some(vec![created_category.id.clone()]),
             priority: None,
         };
-        let second_update = update_reminder_helper(
-            client,
-            addr,
-            token.as_str(),
-            reminders[0].id.clone(),
-            multiple_updates,
-        )
-        .await
-        .expect("Failed to update a reminder");
+        let second_update = update_reminder_helper(client, addr, token.as_str(), reminders[0].id.clone(), multiple_updates)
+            .await
+            .expect("Failed to update a reminder");
         assert_eq!(second_update.categories, vec![created_category.id.clone()]);
         assert_eq!(second_update.name.as_str(), "new name");
 
@@ -236,10 +184,9 @@ mod reminder_testing {
 
         // Create a category
         let category_slug = "test_category";
-        let created_category =
-            create_category(client, token.as_str(), category_slug, category_slug, addr)
-                .await
-                .expect("Failed to create a new category");
+        let created_category = create_category(client, token.as_str(), category_slug, category_slug, addr)
+            .await
+            .expect("Failed to create a new category");
         assert_eq!(created_category.slug.as_str(), category_slug);
         assert_eq!(created_category.name.as_str(), category_slug);
         assert_eq!(created_category.user_id, user.id);
@@ -256,15 +203,9 @@ mod reminder_testing {
 
         // Create a second category
         let second_category_slug = "second_category";
-        create_category(
-            client,
-            token.as_str(),
-            second_category_slug,
-            second_category_slug,
-            addr,
-        )
-        .await
-        .expect("Failed to create a new category");
+        create_category(client, token.as_str(), second_category_slug, second_category_slug, addr)
+            .await
+            .expect("Failed to create a new category");
 
         // Get all categories
         let categories = get_categories(&helper.client, token.as_str(), &helper.address)

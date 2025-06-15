@@ -10,6 +10,7 @@ use serde_json::{value::Value, Map};
 use std::fmt;
 use std::net::SocketAddr;
 
+pub mod chat_helpers;
 pub mod games_helpers;
 pub mod log_helpers;
 pub mod reminder_helpers;
@@ -50,10 +51,7 @@ where
     let req = req_builder
         .body(Body::from(json_bytes(data)))
         .expect("Failed to construct a POST request");
-    let res = client
-        .request(req)
-        .await
-        .expect("Failed to make a POST request");
+    let res = client.request(req).await.expect("Failed to make a POST request");
     match res.status() {
         StatusCode::CREATED => {
             let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -68,12 +66,7 @@ where
     }
 }
 
-pub async fn get_request<U>(
-    client: &Client<HttpConnector, Body>,
-    path: &str,
-    token: &str,
-    addr: &SocketAddr,
-) -> Result<U, (StatusCode, String)>
+pub async fn get_request<U>(client: &Client<HttpConnector, Body>, path: &str, token: &str, addr: &SocketAddr) -> Result<U, (StatusCode, String)>
 where
     U: for<'a> Deserialize<'a>,
 {
@@ -85,10 +78,7 @@ where
         .header("authorization", token)
         .body(Body::empty())
         .expect("Failed to construct a GET request");
-    let res = client
-        .request(req)
-        .await
-        .expect("Failed to make a GET request");
+    let res = client.request(req).await.expect("Failed to make a GET request");
     match res.status() {
         StatusCode::OK => {
             let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -122,10 +112,7 @@ where
         .header("authorization", token)
         .body(Body::from(json_bytes(data)))
         .expect("Failed to construct a PUT request");
-    let res = client
-        .request(req)
-        .await
-        .expect("Failed to make a PUT request");
+    let res = client.request(req).await.expect("Failed to make a PUT request");
     match res.status() {
         StatusCode::OK => {
             let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -140,12 +127,7 @@ where
     }
 }
 
-pub async fn delete_request(
-    client: &Client<HttpConnector, Body>,
-    path: &str,
-    token: &str,
-    addr: &SocketAddr,
-) -> Result<(), (StatusCode, String)> {
+pub async fn delete_request(client: &Client<HttpConnector, Body>, path: &str, token: &str, addr: &SocketAddr) -> Result<(), (StatusCode, String)> {
     let req = Request::builder()
         .uri(format!("http://{addr}/api{path}"))
         .method("DELETE")
@@ -154,10 +136,7 @@ pub async fn delete_request(
         .header("authorization", token)
         .body(Body::empty())
         .expect("Failed to construct a DELETE request");
-    let res = client
-        .request(req)
-        .await
-        .expect("Failed to make a DELETE request");
+    let res = client.request(req).await.expect("Failed to make a DELETE request");
     match res.status() {
         StatusCode::OK => Ok(()),
         _ => {
@@ -171,10 +150,7 @@ pub async fn delete_request(
 
 pub fn read_error_message(body: Bytes) -> String {
     let res: Map<String, Value> = serde_json::from_slice(body.as_ref()).unwrap();
-    match res
-        .get("msg")
-        .expect("Failed to read 'msg' field in an error message")
-    {
+    match res.get("msg").expect("Failed to read 'msg' field in an error message") {
         Value::String(error_msg) => error_msg.to_owned(),
         _ => panic!("Failed to convert error message from response into a string"),
     }

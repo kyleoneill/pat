@@ -24,13 +24,9 @@ where
             "Medium" => Ok(Priority::Medium),
             "High" => Ok(Priority::High),
             "VeryHigh" => Ok(Priority::VeryHigh),
-            _ => Err(serde::de::Error::custom(
-                "Got an unexpected value when deserializing a Priority",
-            )),
+            _ => Err(serde::de::Error::custom("Got an unexpected value when deserializing a Priority")),
         },
-        _ => Err(serde::de::Error::custom(
-            "Got an unexpected value when deserializing a Priority",
-        )),
+        _ => Err(serde::de::Error::custom("Got an unexpected value when deserializing a Priority")),
     }
 }
 

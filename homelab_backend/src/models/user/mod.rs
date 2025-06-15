@@ -20,9 +20,7 @@ where
     if let Bson::Int64(value) = bson {
         Ok(AuthLevel::from(value))
     } else {
-        Err(serde::de::Error::custom(
-            "Expected an Int64 while deserializing AuthLevel",
-        ))
+        Err(serde::de::Error::custom("Expected an Int64 while deserializing AuthLevel"))
     }
 }
 
