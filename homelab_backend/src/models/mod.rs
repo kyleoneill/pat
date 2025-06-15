@@ -15,9 +15,7 @@ where
     match bson {
         Bson::ObjectId(value) => Ok(value.to_hex()),
         Bson::String(value) => Ok(value),
-        _ => Err(serde::de::Error::custom(
-            "Failed to deserialize an ObjectId",
-        )),
+        _ => Err(serde::de::Error::custom("Failed to deserialize an ObjectId")),
     }
 }
 

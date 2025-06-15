@@ -6,9 +6,7 @@ mod chat_testing {
 
     use crate::models::chat::chat_channel::{ChannelType, CreateChannelSchema};
 
-    use crate::testing::helpers::chat_helpers::{
-        create_chat_channel, subscribe_to_channel, unsubscribe_from_channel, list_channels,
-    };
+    use crate::testing::helpers::chat_helpers::{create_chat_channel, list_channels, subscribe_to_channel, unsubscribe_from_channel};
 
     /*
       TESTING
@@ -42,21 +40,15 @@ mod chat_testing {
 
         // Create users
         create_user(client, username, password, addr).await.unwrap();
-        create_user(client, username_two, password_two, addr)
-            .await
-            .unwrap();
+        create_user(client, username_two, password_two, addr).await.unwrap();
 
         // Get tokens for the users
         let token = auth_user(client, username, password, addr).await.unwrap();
-        let second_token = auth_user(client, username_two, password_two, addr)
-            .await
-            .unwrap();
+        let second_token = auth_user(client, username_two, password_two, addr).await.unwrap();
 
         // Get our user so we have their id
         let user = get_user_me(client, token.as_str(), addr).await.unwrap();
-        let user_two = get_user_me(client, second_token.as_str(), addr)
-            .await
-            .unwrap();
+        let user_two = get_user_me(client, second_token.as_str(), addr).await.unwrap();
 
         // Create a channel without a name
         let data = CreateChannelSchema {
@@ -115,10 +107,9 @@ mod chat_testing {
         };
 
         // Subscribe to a channel
-        let subscribed_channel =
-            subscribe_to_channel(client, addr, token.as_str(), third_channel.id.as_str())
-                .await
-                .expect("Failed to subscribe to another users chat channel");
+        let subscribed_channel = subscribe_to_channel(client, addr, token.as_str(), third_channel.id.as_str())
+            .await
+            .expect("Failed to subscribe to another users chat channel");
         assert!(subscribed_channel.subscribers.contains(&user.id));
 
         // Try to subscribe to a channel the user is already subscribed to
@@ -142,16 +133,13 @@ mod chat_testing {
         };
 
         // Unsubscribe from a channel
-        let unsubscribed_channel =
-            unsubscribe_from_channel(client, addr, token.as_str(), third_channel.id.as_str())
-                .await
-                .expect("Failed to unsubscribe from another users chat channel");
+        let unsubscribed_channel = unsubscribe_from_channel(client, addr, token.as_str(), third_channel.id.as_str())
+            .await
+            .expect("Failed to unsubscribe from another users chat channel");
         assert!(!unsubscribed_channel.subscribers.contains(&user.id));
 
         // Try to unsubscribe from a channel the user is not in
-        match unsubscribe_from_channel(client, addr, token.as_str(), third_channel.id.as_str())
-            .await
-        {
+        match unsubscribe_from_channel(client, addr, token.as_str(), third_channel.id.as_str()).await {
             Ok(_) => panic!("Unsubscribing from a channel a user is not in should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -161,32 +149,47 @@ mod chat_testing {
         };
 
         // Try to unsubscribe from an owned channel, which should fail
-        match unsubscribe_from_channel(client, addr, token.as_str(), first_channel.id.as_str())
-            .await
-        {
+        match unsubscribe_from_channel(client, addr, token.as_str(), first_channel.id.as_str()).await {
             Ok(_) => panic!("Unsubscribing from an owned channel should fail"),
-            Err((status_code, _msg)) => assert_eq!(
-                status_code,
-                StatusCode::NOT_FOUND,
-                "Unsubscribing from an owned channel should 404"
-            ),
+            Err((status_code, _msg)) => assert_eq!(status_code, StatusCode::NOT_FOUND, "Unsubscribing from an owned channel should 404"),
         };
-        
+
         // List all channels
-        let all_channels = list_channels(client, addr, token.as_str(), true, true).await.expect("Failed to list all chat channels");
+        let all_channels = list_channels(client, addr, token.as_str(), "?all_channels=true")
+            .await
+            .expect("Failed to list all chat channels");
         assert_eq!(all_channels.len(), 3);
-        
+
         // List my channels
-        let my_channels = list_channels(client, addr, token.as_str(), false, true).await.expect("Failed to list my chat channels");
+        let my_channels = list_channels(client, addr, token.as_str(), "?my_channels=true")
+            .await
+            .expect("Failed to list my chat channels");
         assert_eq!(my_channels.len(), 2);
         assert_eq!(my_channels[0].owner_id, user.id);
         assert_eq!(my_channels[1].owner_id, user.id);
-        
+
         // List other channels
-        let other_channels = list_channels(client, addr, token.as_str(), false, false).await.expect("Failed to list other chat channels");
+        let other_channels = list_channels(client, addr, token.as_str(), "")
+            .await
+            .expect("Failed to list channels owned by users other than the requester");
         assert_eq!(other_channels.len(), 1);
         assert_eq!(other_channels[0].owner_id, user_two.id);
-        
+
+        // List subscribed channels, include "my_channels" here as the user is currently only subscribed to their own channels
+        let subscribed = list_channels(client, addr, token.as_str(), "?subscribed=true&my_channels=true")
+            .await
+            .expect("Failed to list channels the requester subscribes to");
+        assert_eq!(subscribed.len(), 2);
+        assert!(subscribed[0].subscribers.contains(&user.id));
+        assert!(subscribed[1].subscribers.contains(&user.id));
+
+        // List unsubscribed channels
+        let unsubscribed = list_channels(client, addr, token.as_str(), "?subscribed=false")
+            .await
+            .expect("Failed to list channels the requester is not subscribed to");
+        assert_eq!(unsubscribed.len(), 1);
+        assert!(!unsubscribed[0].subscribers.contains(&user.id));
+
         // TODO: Delete channel
         // TODO: Try to delete a channel not owned by me
     }

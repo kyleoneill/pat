@@ -14,20 +14,15 @@ use crate::models::user::jwt::{decode_jwt, get_and_decode_auth_token};
 use crate::models::user::user_db::db_get_user_by_id;
 use crate::models::user::User;
 
-async fn get_user(
-    pool: &Database,
-    maybe_user_id: Result<String, String>,
-) -> Result<User, ServerError> {
+async fn get_user(pool: &Database, maybe_user_id: Result<String, String>) -> Result<User, ServerError> {
     match maybe_user_id {
         Ok(user_id) => match db_get_user_by_id(pool, user_id).await {
             Ok(user) => Ok(user),
             Err(e) => match e {
-                DbError::NotFound(resource_kind, identifier) => {
-                    Err(ServerError::FailedAuthentication(format!(
-                        "Could not find {} with identifier {}",
-                        resource_kind, identifier
-                    )))
-                }
+                DbError::NotFound(resource_kind, identifier) => Err(ServerError::FailedAuthentication(format!(
+                    "Could not find {} with identifier {}",
+                    resource_kind, identifier
+                ))),
                 _ => Err(ServerError::InternalFailure("Authenticating".to_owned())),
             },
         },
@@ -35,20 +30,12 @@ async fn get_user(
     }
 }
 
-pub async fn get_user_from_auth_header(
-    pool: &Database,
-    headers: &HeaderMap,
-    app_secret: &str,
-) -> Result<User, ServerError> {
+pub async fn get_user_from_auth_header(pool: &Database, headers: &HeaderMap, app_secret: &str) -> Result<User, ServerError> {
     let maybe_id = get_and_decode_auth_token(headers, app_secret);
     get_user(pool, maybe_id).await
 }
 
-pub async fn get_user_from_token(
-    pool: &Database,
-    token: &str,
-    app_secret: &str,
-) -> Result<User, ServerError> {
+pub async fn get_user_from_token(pool: &Database, token: &str, app_secret: &str) -> Result<User, ServerError> {
     let maybe_id = decode_jwt(token, app_secret);
     get_user(pool, maybe_id).await
 }

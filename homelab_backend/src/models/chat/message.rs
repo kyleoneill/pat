@@ -55,8 +55,7 @@ impl CreateMessageSchema {
         if self.reply_to.is_some() {
             doc.insert(
                 "reply_to",
-                self.reply_to
-                    .expect("Option should always have a value when is_some() is true"),
+                self.reply_to.expect("Option should always have a value when is_some() is true"),
             );
         }
         doc

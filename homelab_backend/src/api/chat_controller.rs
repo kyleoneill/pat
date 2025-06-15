@@ -3,7 +3,7 @@ use crate::api::return_data::ReturnData;
 use crate::error_handler::DbError;
 use crate::models::chat::{
     chat_channel::{ChatChannel, CreateChannelSchema},
-    chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, update_chat_channel_by_id, list_chat_channels},
+    chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
     message_db::insert_chat_message,
     packet::{WebsocketAck, WebsocketMessage},
 };
@@ -75,6 +75,7 @@ async fn channel_subscribe(
         Err(_) => return DbError::BadId.into(),
     };
 
+    // subscribers filter verifies that the user is not already subscribed to this channel
     let filter_doc: Document = doc! {
         "_id": Bson::ObjectId(channel_id),
         "subscribers": {
@@ -89,14 +90,7 @@ async fn channel_subscribe(
         "$push": {"subscribers": user_id.as_str()}
     };
 
-    match update_chat_channel_by_id(
-        pool,
-        channel_data.channel_id.as_str(),
-        filter_doc,
-        update_doc,
-    )
-    .await
-    {
+    match update_chat_channel_by_id(pool, channel_data.channel_id.as_str(), filter_doc, update_doc).await {
         Ok(chat_channel) => ReturnData::ok(chat_channel),
         Err(db_err) => db_err.into(),
     }
@@ -130,14 +124,7 @@ async fn channel_unsubscribe(
         "$pull": {"subscribers": user_id.as_str()}
     };
 
-    match update_chat_channel_by_id(
-        pool,
-        channel_data.channel_id.as_str(),
-        filter_doc,
-        update_doc,
-    )
-    .await
-    {
+    match update_chat_channel_by_id(pool, channel_data.channel_id.as_str(), filter_doc, update_doc).await {
         Ok(chat_channel) => ReturnData::ok(chat_channel),
         Err(db_err) => db_err.into(),
     }
@@ -147,6 +134,7 @@ async fn channel_unsubscribe(
 struct ListChannelsQueryParams {
     my_channels: Option<bool>,
     all_channels: Option<bool>,
+    subscribed: Option<bool>,
 }
 
 async fn list_channels(
@@ -160,23 +148,52 @@ async fn list_channels(
         Err(e) => return e.into(),
     };
     let user_id = user.get_id();
+
+    // Build the filter for this listing
     let filter_doc = {
         if query_params.all_channels.is_some() && query_params.all_channels.unwrap() {
-            // Get all channels
+            // passing in all_channels=true means we want every channel
             doc! {}
-        }
-        else if query_params.my_channels.is_some() && query_params.my_channels.unwrap() {
-            // Get channels owned by the requester
-            doc! {"owner_id": user_id.clone()}
-        }
-        else {
-            // Get channels not owned by the requester
-            doc! {"owner_id": {"$ne": user_id.clone()}}
+        } else {
+            let mut building_doc = doc! {};
+
+            // Check if we want to get the channels owned by the current user, default to channels
+            // owned by others
+            if query_params.my_channels.is_some() && query_params.my_channels.unwrap() {
+                // Get channels owned by the requester
+                building_doc.insert("owner_id", user_id.clone());
+            } else {
+                building_doc.insert("owner_id", doc! {"$ne": user_id.clone()});
+            }
+
+            // Check if we want to filter for documents that the requester is subscribed to or not
+            if query_params.subscribed.is_some() {
+                match query_params.subscribed.unwrap() {
+                    true => {
+                        building_doc.insert("subscribers", user_id.as_str());
+                    }
+                    false => {
+                        building_doc.insert(
+                            "subscribers",
+                            doc! {
+                                "$not": {
+                                    "$elemMatch": {
+                                        "$eq": user_id.as_str()
+                                    }
+                                }
+                            },
+                        );
+                    }
+                }
+            };
+
+            building_doc
         }
     };
+
     match list_chat_channels(pool, filter_doc).await {
         Ok(channels) => ReturnData::ok(channels),
-        Err(db_err) => db_err.into()
+        Err(db_err) => db_err.into(),
     }
 }
 
@@ -193,13 +210,7 @@ async fn chat_connect(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     let pool = &app_state.db;
-    let user = match get_user_from_token(
-        pool,
-        query_params.auth_token.as_str(),
-        &app_state.config.app_secret,
-    )
-    .await
-    {
+    let user = match get_user_from_token(pool, query_params.auth_token.as_str(), &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(_e) => {
             // Must return a Response<Body> here due to the return value of ws.on_upgrade
@@ -216,12 +227,7 @@ async fn chat_connect(
     ws.on_upgrade(move |socket| handle_socket(socket, addr, user.get_id(), app_state))
 }
 
-async fn handle_socket(
-    socket: WebSocket,
-    _who: SocketAddr,
-    user_id: String,
-    app_state: Arc<AppState>,
-) {
+async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app_state: Arc<AppState>) {
     // Create a channel to send messages
     let (tx, mut rx) = mpsc::unbounded_channel::<WebsocketMessage>();
 
@@ -271,33 +277,16 @@ async fn handle_socket(
                                 // Verify that the current user is a subscriber of the channel
                                 if channel.subscribers.contains(&user_id_read_task) {
                                     // Create a db entry for this message
-                                    match insert_chat_message(
-                                        &cloned_state.db,
-                                        msg_to_create,
-                                        user_id_read_task.as_str(),
-                                    )
-                                    .await
-                                    {
+                                    match insert_chat_message(&cloned_state.db, msg_to_create, user_id_read_task.as_str()).await {
                                         Ok(chat_message) => {
                                             // Check to see if any subscribers of the destination channel have active connections
                                             for subscriber in channel.subscribers {
-                                                if let Some(tx) = (&cloned_state)
-                                                    .active_connections
-                                                    .read()
-                                                    .await
-                                                    .get(subscriber.as_str())
-                                                {
-                                                    let _ =
-                                                        tx.send(WebsocketMessage::SendChatMessage(
-                                                            chat_message.clone(),
-                                                        ));
+                                                if let Some(tx) = (&cloned_state).active_connections.read().await.get(subscriber.as_str()) {
+                                                    let _ = tx.send(WebsocketMessage::SendChatMessage(chat_message.clone()));
                                                 }
                                             }
                                             ack.status_code = 200;
-                                            ack.msg.push_str(&format!(
-                                                "Created chat message with ID {}",
-                                                chat_message.id
-                                            ));
+                                            ack.msg.push_str(&format!("Created chat message with ID {}", chat_message.id));
                                         }
                                         Err(_) => {
                                             ack.status_code = 500;
@@ -349,20 +338,14 @@ async fn handle_socket(
                     Err(_e) => {
                         // TODO: Handle error
                         //       Send a SendErrorMessage to tx?
-                        logger::log_msg(
-                            "Error while deserializing a websocket packet from a string",
-                        );
+                        logger::log_msg("Error while deserializing a websocket packet from a string");
                     }
                 }
             }
         }
 
         // Clean up on disconnect
-        cloned_state
-            .active_connections
-            .write()
-            .await
-            .remove(user_id_read_task.as_str());
+        cloned_state.active_connections.write().await.remove(user_id_read_task.as_str());
     });
 
     // Spawn a task to send messages to the socket
@@ -391,9 +374,5 @@ async fn handle_socket(
     }
 
     // Cleanup, in case the write_task is closed before the read_task
-    app_state
-        .active_connections
-        .write()
-        .await
-        .remove(user_id.as_str());
+    app_state.active_connections.write().await.remove(user_id.as_str());
 }

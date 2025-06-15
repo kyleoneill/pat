@@ -9,11 +9,7 @@ use mongodb::{
     Collection, Database,
 };
 
-pub async fn insert_chat_message(
-    pool: &Database,
-    data: CreateMessageSchema,
-    user_id: &str,
-) -> Result<ChatMessage, DbError> {
+pub async fn insert_chat_message(pool: &Database, data: CreateMessageSchema, user_id: &str) -> Result<ChatMessage, DbError> {
     let collection: Collection<Document> = pool.collection("chat_messages");
     let doc = data.create_message_doc(user_id);
     let res = match collection.insert_one(doc).await {
@@ -24,15 +20,11 @@ pub async fn insert_chat_message(
             }
         }
     };
-    let id = id_to_string(res.inserted_id)
-        .expect("InsertOneResult.inserted_id should always be an ObjectId");
+    let id = id_to_string(res.inserted_id).expect("InsertOneResult.inserted_id should always be an ObjectId");
     get_chat_message_by_id(pool, id.as_str()).await
 }
 
-pub async fn get_chat_message_by_id(
-    pool: &Database,
-    message_id: &str,
-) -> Result<ChatMessage, DbError> {
+pub async fn get_chat_message_by_id(pool: &Database, message_id: &str) -> Result<ChatMessage, DbError> {
     let collection: Collection<ChatMessage> = pool.collection("chat_messages");
     let msg_id: ObjectId = match message_id.parse() {
         Ok(bson_id) => bson_id,
@@ -42,10 +34,7 @@ pub async fn get_chat_message_by_id(
     match collection.find_one(doc).await {
         Ok(maybe_record) => match maybe_record {
             Some(record) => Ok(record),
-            None => Err(DbError::NotFound(
-                ResourceKind::ChatMessage,
-                message_id.to_owned(),
-            )),
+            None => Err(DbError::NotFound(ResourceKind::ChatMessage, message_id.to_owned())),
         },
         Err(e) => Err(e.into()),
     }

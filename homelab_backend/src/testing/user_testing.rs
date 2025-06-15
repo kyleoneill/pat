@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod user_testing {
-    use crate::testing::helpers::user_helpers::{
-        auth_user, create_user, delete_user_me, get_user_me,
-    };
+    use crate::testing::helpers::user_helpers::{auth_user, create_user, delete_user_me, get_user_me};
     use crate::testing::TestHelper;
     use axum::http::StatusCode;
 

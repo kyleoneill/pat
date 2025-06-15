@@ -42,9 +42,8 @@ pub async fn list_channels(
     client: &Client<HttpConnector, Body>,
     addr: &SocketAddr,
     token: &str,
-    all_channels: bool,
-    my_channels: bool,
+    query_params: &str,
 ) -> Result<Vec<ChatChannel>, (StatusCode, String)> {
-    let path = format!("/chat/channels?all_channels={}&my_channels={}", all_channels, my_channels);
+    let path = format!("/chat/channels{}", query_params);
     get_request(client, path.as_str(), token, addr).await
 }

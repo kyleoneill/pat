@@ -28,9 +28,7 @@ where
         // Why is this sometimes being deserialized as a string here?
         Ok(ChannelType::from(value))
     } else {
-        Err(serde::de::Error::custom(
-            "Expected an Int64 while deserializing ChannelType",
-        ))
+        Err(serde::de::Error::custom("Expected an Int64 while deserializing ChannelType"))
     }
 }
 

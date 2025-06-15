@@ -29,10 +29,7 @@ pub async fn db_get_log_by_id(pool: &Database, log_id: String) -> Result<Log, Db
     match collection.find_one(doc).await {
         Ok(maybe_doc) => match maybe_doc {
             Some(log) => Ok(log),
-            None => Err(DbError::NotFound(
-                ResourceKind::Log,
-                log_id.to_owned().to_string(),
-            )),
+            None => Err(DbError::NotFound(ResourceKind::Log, log_id.to_owned().to_string())),
         },
         Err(e) => Err(e.into()),
     }

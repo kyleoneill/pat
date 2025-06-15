@@ -11,11 +11,7 @@ pub struct LogCreationTask {
 
 impl Display for LogCreationTask {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}: {} {} from {}",
-            self.date_time, self.method, self.uri, self.user_id
-        )
+        write!(f, "{}: {} {} from {}", self.date_time, self.method, self.uri, self.user_id)
     }
 }
 
