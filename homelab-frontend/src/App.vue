@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import { RouterView } from 'vue-router';
   import LoginForm from '@/components/LoginForm.vue';
-  import { global_state } from './stores/store';
+  import { globalState } from './stores/store';
 
   import app_config from '@/../config.json';
   import axios from 'axios';
@@ -19,7 +19,7 @@
 
   let maybe_token: string | null = localStorage.getItem("token");
   if (maybe_token != null) {
-    global_state.set_token(maybe_token);
+    globalState.setToken(maybe_token);
     axios.defaults.headers.common["Authorization"] = maybe_token;
 
     // Verify that the token is still valid
@@ -79,7 +79,7 @@
 
 main {
   min-width: 50rem;
-  margin-top: 2rem;
+  margin-top: 4vh;
 }
 
 </style>

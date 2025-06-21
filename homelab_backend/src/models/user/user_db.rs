@@ -6,13 +6,7 @@ use mongodb::bson::Bson;
 use mongodb::bson::{doc, Document};
 use mongodb::{Collection, Database};
 
-pub async fn db_create_user(
-    pool: &Database,
-    username: String,
-    hash: String,
-    auth_level: AuthLevel,
-    salt: String,
-) -> Result<(), DbError> {
+pub async fn db_create_user(pool: &Database, username: String, hash: String, auth_level: AuthLevel, salt: String) -> Result<(), DbError> {
     let collection: Collection<Document> = pool.collection("users");
     let doc = doc! {
         "username": username,

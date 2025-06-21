@@ -18,11 +18,7 @@ pub async fn create_category(
     post_request(client, "/reminders/category", data, Some(token), addr).await
 }
 
-pub async fn get_categories(
-    client: &Client<HttpConnector, Body>,
-    token: &str,
-    addr: &SocketAddr,
-) -> Result<Vec<Category>, (StatusCode, String)> {
+pub async fn get_categories(client: &Client<HttpConnector, Body>, token: &str, addr: &SocketAddr) -> Result<Vec<Category>, (StatusCode, String)> {
     get_request(client, "/reminders/category", token, addr).await
 }
 

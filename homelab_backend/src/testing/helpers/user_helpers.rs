@@ -27,18 +27,10 @@ pub async fn auth_user(
     post_request(client, "/users/auth", data, None, addr).await
 }
 
-pub async fn get_user_me(
-    client: &Client<HttpConnector, Body>,
-    token: &str,
-    addr: &SocketAddr,
-) -> Result<ReturnUser, (StatusCode, String)> {
+pub async fn get_user_me(client: &Client<HttpConnector, Body>, token: &str, addr: &SocketAddr) -> Result<ReturnUser, (StatusCode, String)> {
     get_request(client, "/users/me", token, addr).await
 }
 
-pub async fn delete_user_me(
-    client: &Client<HttpConnector, Body>,
-    token: &str,
-    addr: &SocketAddr,
-) -> Result<(), (StatusCode, String)> {
+pub async fn delete_user_me(client: &Client<HttpConnector, Body>, token: &str, addr: &SocketAddr) -> Result<(), (StatusCode, String)> {
     delete_request(client, "/users/me", token, addr).await
 }
