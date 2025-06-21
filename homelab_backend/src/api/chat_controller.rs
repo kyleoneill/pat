@@ -5,7 +5,7 @@ use crate::models::chat::{
     chat_channel::{ChatChannel, CreateChannelSchema},
     chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
     message_db::insert_chat_message,
-    packet::{WebSocketRequest, WebSocketResponse, WebsocketAck},
+    packet::{WebSocketRequest, WebSocketResponse, WebSocketError},
 };
 use crate::{logger, AppState};
 use axum::{
@@ -262,7 +262,7 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                         // Can this be made more readable
 
                         // Construct a response that will be sent to the client which sent this request
-                        let mut ack = WebsocketAck::new();
+                        let mut websocket_error = WebSocketError::new();
 
                         // Verify that the message is being sent to a valid channel that the sender is in
                         let channel_id = msg_to_create.channel_id.as_str();
@@ -279,17 +279,15 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                                                     let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
                                                 }
                                             }
-                                            ack.status_code = 200;
-                                            ack.msg.push_str(&format!("Created chat message with ID {}", chat_message.id));
                                         }
                                         Err(_) => {
-                                            ack.status_code = 500;
-                                            ack.msg.push_str("Failed to create a chat message with an unknown reason");
+                                            websocket_error.status_code = 500;
+                                            websocket_error.msg.push_str("Failed to create a chat message with an unknown reason");
                                         }
                                     }
                                 } else {
-                                    ack.status_code = 400;
-                                    ack.msg.push_str("You are not in this chat channel");
+                                    websocket_error.status_code = 400;
+                                    websocket_error.msg.push_str("You are not in this chat channel");
                                 }
                             }
                             Err(_) => {
@@ -297,21 +295,23 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                                 //       Also the way `ack` is being build here sucks. Status should be
                                 //       using an enum, this should probably be set in a mut ref method like
                                 //       fn set_act(&mut self, status: Status, msg: &str)
-                                ack.status_code = 404;
-                                ack.msg.push_str("Chat channel does not exist");
+                                websocket_error.status_code = 404;
+                                websocket_error.msg.push_str("Chat channel does not exist");
                             }
                         }
 
-                        // Send the ack to the client who sent this request
-                        let connections = cloned_state.active_connections.read().await;
-                        match connections.get(user_id_read_task.as_str()) {
-                            Some(tx) => {
-                                let _ = tx.send(WebSocketResponse::SendAck(ack));
-                            }
-                            None => {
-                                // Currently active connection is gone, log this?
-                            }
-                        };
+                        // If we hit an error, let the client know
+                        if websocket_error.status_code > 200 {
+                            let connections = cloned_state.active_connections.read().await;
+                            match connections.get(user_id_read_task.as_str()) {
+                                Some(tx) => {
+                                    let _ = tx.send(WebSocketResponse::SendError(websocket_error));
+                                }
+                                None => {
+                                    // Currently active connection is gone, log this?
+                                }
+                            };
+                        }
                     }
                     Ok(WebSocketRequest::GetChatState(msg_request)) => {
                         println!("DEBUG ReceiveChatUpdateRequest: {:?}", msg_request);

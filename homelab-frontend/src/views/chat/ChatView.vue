@@ -1,17 +1,11 @@
 <script setup lang="ts">
   import type { Ref } from 'vue';
+  import type { ChatChannel } from '@/models/chat_interfaces';
 
-  import type { ChatChannel, WebSocketSendPacket } from '@/models/chat_interfaces';
-
-  import { RouterLink } from 'vue-router';
   import { ref } from 'vue';
-
   import { globalState } from '@/stores/store';
-
   import { connectChat, listChatChannels } from '@/api/chat_api';
-
   import useToasterStore from '@/stores/useToasterStore';
-
   import MessageInput from '@/components/chat/MessageInput.vue';
 
   const toasterStore = useToasterStore();
@@ -68,9 +62,9 @@
   }
 
   // TODO:
-  //  - establish a ws connection on page load
   //  - load messages for a chat on chat select
   //  - send/receive messages in the chat section
+  // HANDLE STORING USER ID AND THEN DISCRIMINATING MESSAGES ON IF THEY ARE AUTHORED BY CURRENT USER
 
   getChatChannels();
   establishWebsocketConnection();
@@ -94,8 +88,9 @@
       <div class="chat-area" v-if="selectedChannel !== null">
         <h2>{{ selectedChannelName }}</h2>
         <div class="messages-area">
-          <div>foo</div>
-          <div>bar</div>
+          <div v-for="(message, index) in globalState.chatMessages" :key="index">
+            <div>{{ message.author_id }} - {{ message.contents }}</div>
+          </div>
         </div>
         <MessageInput class="message-input" @send-message="sendMessage"/>
       </div>

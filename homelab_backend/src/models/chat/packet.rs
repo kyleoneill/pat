@@ -12,12 +12,12 @@ pub struct RequestMessagesSchema {
 
 // TODO: Define error codes, maybe just make an enum that serializes to ints?
 #[derive(Clone, Serialize, Deserialize)]
-pub struct WebsocketAck {
+pub struct WebSocketError {
     pub status_code: i64,
     pub msg: String,
 }
 
-impl WebsocketAck {
+impl WebSocketError {
     pub fn new() -> Self {
         Self {
             status_code: 0,
@@ -50,7 +50,7 @@ pub enum WebSocketRequest {
 #[serde(tag = "type", content = "data")]
 pub enum WebSocketResponse {
     SendChatMessage(ChatMessage),
-    SendAck(WebsocketAck),
+    SendError(WebSocketError),
 }
 
 // TODO: React to message packet (receive and send)

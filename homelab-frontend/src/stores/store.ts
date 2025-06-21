@@ -1,3 +1,5 @@
+import type { ChatMessage } from '@/models/chat_interfaces';
+
 import { reactive } from 'vue';
 
 interface State {
@@ -5,6 +7,7 @@ interface State {
   setToken: (token: string) => void,
   websocketConnection: WebSocket | null,
   setWebsocketConnection: (connection: WebSocket) => void,
+  chatMessages: Array<ChatMessage>,
 }
 
 export const globalState = reactive({
@@ -15,5 +18,6 @@ export const globalState = reactive({
   websocketConnection: null,
   setWebsocketConnection(connection: WebSocket): void {
     this.websocketConnection = connection;
-  }
+  },
+  chatMessages: [],
 } as State)
