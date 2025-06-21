@@ -154,22 +154,22 @@ mod chat_testing {
             Err((status_code, _msg)) => assert_eq!(status_code, StatusCode::NOT_FOUND, "Unsubscribing from an owned channel should 404"),
         };
 
-        // List all channels
-        let all_channels = list_channels(client, addr, token.as_str(), "?all_channels=true")
+        // List all channels with no query params
+        let all_channels = list_channels(client, addr, token.as_str(), "")
             .await
             .expect("Failed to list all chat channels");
         assert_eq!(all_channels.len(), 3);
 
-        // List my channels
+        // List only my channels
         let my_channels = list_channels(client, addr, token.as_str(), "?my_channels=true")
             .await
-            .expect("Failed to list my chat channels");
+            .expect("Failed to list channels filtered to ones owned by the requester");
         assert_eq!(my_channels.len(), 2);
         assert_eq!(my_channels[0].owner_id, user.id);
         assert_eq!(my_channels[1].owner_id, user.id);
 
-        // List other channels
-        let other_channels = list_channels(client, addr, token.as_str(), "")
+        // List only other channels
+        let other_channels = list_channels(client, addr, token.as_str(), "?my_channels=false")
             .await
             .expect("Failed to list channels owned by users other than the requester");
         assert_eq!(other_channels.len(), 1);

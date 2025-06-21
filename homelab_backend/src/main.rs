@@ -40,7 +40,7 @@ use tower_http::{
 
 use tracing::Span;
 
-use crate::models::chat::packet::WebsocketMessage;
+use crate::models::chat::packet::WebSocketResponse;
 use mongodb::Database;
 use tower_http::trace::DefaultMakeSpan;
 
@@ -53,7 +53,7 @@ pub struct AppState {
     // disconnects are being made, maybe 400k users for a 4GHz processor. App state will lock every
     // single time there is a connect/disconnect and prevent processing messages being sent while
     // active_connections is being updated
-    pub active_connections: RwLock<HashMap<String, tokio_mpsc::UnboundedSender<WebsocketMessage>>>,
+    pub active_connections: RwLock<HashMap<String, tokio_mpsc::UnboundedSender<WebSocketResponse>>>,
 }
 
 #[derive(Debug, Clone)]

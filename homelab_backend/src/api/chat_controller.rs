@@ -5,7 +5,7 @@ use crate::models::chat::{
     chat_channel::{ChatChannel, CreateChannelSchema},
     chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
     message_db::insert_chat_message,
-    packet::{WebsocketAck, WebsocketMessage},
+    packet::{WebSocketRequest, WebSocketResponse, WebsocketAck},
 };
 use crate::{logger, AppState};
 use axum::{
@@ -133,7 +133,6 @@ async fn channel_unsubscribe(
 #[derive(Deserialize)]
 struct ListChannelsQueryParams {
     my_channels: Option<bool>,
-    all_channels: Option<bool>,
     subscribed: Option<bool>,
 }
 
@@ -151,44 +150,39 @@ async fn list_channels(
 
     // Build the filter for this listing
     let filter_doc = {
-        if query_params.all_channels.is_some() && query_params.all_channels.unwrap() {
-            // passing in all_channels=true means we want every channel
-            doc! {}
-        } else {
-            let mut building_doc = doc! {};
+        let mut building_doc = doc! {};
 
-            // Check if we want to get the channels owned by the current user, default to channels
-            // owned by others
-            if query_params.my_channels.is_some() && query_params.my_channels.unwrap() {
-                // Get channels owned by the requester
+        // Check if we want to filter to owned or un-owned channels
+        if query_params.my_channels.is_some() {
+            if query_params.my_channels.unwrap() {
                 building_doc.insert("owner_id", user_id.clone());
             } else {
                 building_doc.insert("owner_id", doc! {"$ne": user_id.clone()});
             }
-
-            // Check if we want to filter for documents that the requester is subscribed to or not
-            if query_params.subscribed.is_some() {
-                match query_params.subscribed.unwrap() {
-                    true => {
-                        building_doc.insert("subscribers", user_id.as_str());
-                    }
-                    false => {
-                        building_doc.insert(
-                            "subscribers",
-                            doc! {
-                                "$not": {
-                                    "$elemMatch": {
-                                        "$eq": user_id.as_str()
-                                    }
-                                }
-                            },
-                        );
-                    }
-                }
-            };
-
-            building_doc
         }
+
+        // Check if we want to filter for documents that the requester is subscribed to or not
+        if query_params.subscribed.is_some() {
+            match query_params.subscribed.unwrap() {
+                true => {
+                    building_doc.insert("subscribers", user_id.as_str());
+                }
+                false => {
+                    building_doc.insert(
+                        "subscribers",
+                        doc! {
+                            "$not": {
+                                "$elemMatch": {
+                                    "$eq": user_id.as_str()
+                                }
+                            }
+                        },
+                    );
+                }
+            }
+        };
+
+        building_doc
     };
 
     match list_chat_channels(pool, filter_doc).await {
@@ -229,7 +223,7 @@ async fn chat_connect(
 
 async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app_state: Arc<AppState>) {
     // Create a channel to send messages
-    let (tx, mut rx) = mpsc::unbounded_channel::<WebsocketMessage>();
+    let (tx, mut rx) = mpsc::unbounded_channel::<WebSocketResponse>();
 
     // Register the connection
     {
@@ -263,8 +257,8 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
 
             // TODO: Should I match here instead of using an if_let to handle binary data or a Close?
             if let Message::Text(text) = msg {
-                match serde_json::from_str::<WebsocketMessage>(text.as_str()) {
-                    Ok(WebsocketMessage::ReceiveChatMessage(msg_to_create)) => {
+                match serde_json::from_str::<WebSocketRequest>(text.as_str()) {
+                    Ok(WebSocketRequest::CreateMessage(msg_to_create)) => {
                         // Can this be made more readable
 
                         // Construct a response that will be sent to the client which sent this request
@@ -282,7 +276,7 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                                             // Check to see if any subscribers of the destination channel have active connections
                                             for subscriber in channel.subscribers {
                                                 if let Some(tx) = (&cloned_state).active_connections.read().await.get(subscriber.as_str()) {
-                                                    let _ = tx.send(WebsocketMessage::SendChatMessage(chat_message.clone()));
+                                                    let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
                                                 }
                                             }
                                             ack.status_code = 200;
@@ -312,14 +306,17 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                         let connections = cloned_state.active_connections.read().await;
                         match connections.get(user_id_read_task.as_str()) {
                             Some(tx) => {
-                                let _ = tx.send(WebsocketMessage::SendAck(ack));
+                                let _ = tx.send(WebSocketResponse::SendAck(ack));
                             }
                             None => {
                                 // Currently active connection is gone, log this?
                             }
                         };
                     }
-                    Ok(WebsocketMessage::ReceiveChatUpdateRequest(msg_request)) => {
+                    Ok(WebSocketRequest::GetChatState(msg_request)) => {
+                        println!("DEBUG ReceiveChatUpdateRequest: {:?}", msg_request);
+                        // TODO: Implement a chat update, will need to be paginated and maybe
+                        //       take a mongo cursor object as a param/arg
                         // Get messages from db
                         // Send messages to the requestor
 
@@ -329,13 +326,8 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                         //     let _ = tx.send(history);
                         // }
                     }
-                    Ok(WebsocketMessage::SendChatMessage(_)) => {
-                        // This should never be received, this variant is meant to be sent
-                    }
-                    Ok(WebsocketMessage::SendAck(_)) => {
-                        // This should never be received, this variant is meant to be sent
-                    }
-                    Err(_e) => {
+                    Err(e) => {
+                        println!("{:?}", e);
                         // TODO: Handle error
                         //       Send a SendErrorMessage to tx?
                         logger::log_msg("Error while deserializing a websocket packet from a string");

@@ -2,11 +2,12 @@ use serde::{Deserialize, Serialize};
 
 use super::message::{ChatMessage, CreateMessageSchema};
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct RequestMessageSchema {
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct RequestMessagesSchema {
     // TODO: Replace this stuff with a mongodb cursor?
     message_count: i64,
     starting_message: String,
+    channel_id: String,
 }
 
 // TODO: Define error codes, maybe just make an enum that serializes to ints?
@@ -32,7 +33,7 @@ impl WebsocketAck {
 #[serde(tag = "type", content = "data")]
 The above will serialize the enum to look like
 {
- "type": "SendChatMessage",
+ "type": "CreateMessage",
  "data":{
   "chat_message_field": "value"
  }
@@ -40,9 +41,14 @@ The above will serialize the enum to look like
  */
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
-pub enum WebsocketMessage {
-    ReceiveChatMessage(CreateMessageSchema),
-    ReceiveChatUpdateRequest(RequestMessageSchema),
+pub enum WebSocketRequest {
+    CreateMessage(CreateMessageSchema),
+    GetChatState(RequestMessagesSchema),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum WebSocketResponse {
     SendChatMessage(ChatMessage),
     SendAck(WebsocketAck),
 }

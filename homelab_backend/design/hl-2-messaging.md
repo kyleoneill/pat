@@ -119,31 +119,27 @@ The server is responsible for providing updates, the client is responsible for p
 ```rust
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
-pub enum WebsocketMessage {
-  ReceiveChatMessage(CreateMessageSchema),
-  ReceiveChatUpdateRequest(RequestMessageSchema),
-  ReactToMessage(MessageReactSchema),
-  PinMessage(PinMessageSchema),
-  SendChatMessage(ChatMessage)
+pub enum WebSocketRequest {
+  CreateMessage(CreateMessageSchema),
+  GetChatState(RequestMessagesSchema),
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
+pub enum WebSocketResponse {
+  SendChatMessage(ChatMessage),
+  SendAck(WebsocketAck),
 }
 /*
 #[serde(tag = "type", content = "data")]
-The above will serialize a SendChatMessage WebsocketMessage to look like
+The above will serialize a CreateMessage WebSocketRequest to look like
 {
- "type": "SendChatMessage",
+ "type": "CreateMessage",
  "data":{
-  "chat_message_field": "value",
-  // Fields for ChatMessage struct
+  // Fields for the create message schema
  }
 }
  */
-
-pub struct RequestMessageSchema {
-  // When a user requests message history, they can provide some message ID and then a count of messages
-  // which came before it. Maybe this could take a mongo cursor instead, along with a count
-  message_count: i64,
-  starting_message: String,
-}
 ```
 
 There should be a way to populate a chat when a user opens a connection, or to load messages if the user scrolls up in

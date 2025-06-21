@@ -1,13 +1,19 @@
-import { reactive } from 'vue'
+import { reactive } from 'vue';
 
 interface State {
   token: string,
-  set_token: (token: string) => void,
+  setToken: (token: string) => void,
+  websocketConnection: WebSocket | null,
+  setWebsocketConnection: (connection: WebSocket) => void,
 }
 
-export const global_state: State = reactive({
+export const globalState = reactive({
   token: '',
-  set_token(new_token: string): void {
-    this.token = new_token
+  setToken(new_token: string): void {
+    this.token = new_token;
+  },
+  websocketConnection: null,
+  setWebsocketConnection(connection: WebSocket): void {
+    this.websocketConnection = connection;
   }
-})
+} as State)
