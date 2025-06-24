@@ -1,6 +1,9 @@
-use super::chat_channel::{ChatChannel, CreateChannelSchema};
+use super::chat_channel::{ChatChannel, CreateChannelSchema, ReturnChannel};
 use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
+use crate::logger::log_msg;
+use crate::models::user::user_db::db_get_user_by_id;
+use crate::models::user::ReturnUser;
 use futures::TryStreamExt;
 use mongodb::bson::oid::ObjectId;
 use mongodb::error::ErrorKind;
@@ -87,4 +90,19 @@ pub async fn list_chat_channels(pool: &Database, filter_doc: Document) -> Result
         },
         Err(e) => Err(e.into()),
     }
+}
+
+// Might want to re-name this function as it converts one type to another and might change
+// more fields in the future than just subscribers (like the owner)
+pub async fn hydrate_chat_channel_subscribers(pool: &Database, chat_channel: ChatChannel) -> ReturnChannel {
+    let mut users: Vec<ReturnUser> = Vec::new();
+    for user_id in &chat_channel.subscribers {
+        match db_get_user_by_id(pool, user_id.as_str()).await {
+            Ok(user) => users.push(user.into()),
+            Err(_e) => log_msg("Failed to get a user while hydrating chat channel subscribers"),
+        }
+    }
+    let mut return_channel = ReturnChannel::from(chat_channel);
+    return_channel.subscribers = users;
+    return_channel
 }

@@ -45,7 +45,7 @@ pub async fn db_delete_user(pool: &Database, user_id: String) -> Result<(), DbEr
     }
 }
 
-pub async fn db_get_user_by_id(pool: &Database, id: String) -> Result<User, DbError> {
+pub async fn db_get_user_by_id(pool: &Database, id: &str) -> Result<User, DbError> {
     let collection: Collection<User> = pool.collection("users");
     let bson_id: ObjectId = match id.parse() {
         Ok(bson_id) => bson_id,

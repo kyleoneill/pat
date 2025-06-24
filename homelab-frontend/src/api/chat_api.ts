@@ -1,4 +1,4 @@
-import type { CreateChatChannelData, ListChatChannelsParams, ChatChannelSubscribeData, ChatMessage } from '@/models/chat_interfaces';
+import type { CreateChatChannelData, ListChatChannelsParams, ChatChannelSubscribeData, ChatMessage, WebSocketError } from '@/models/chat_interfaces';
 
 import axios from 'axios';
 import { websocket_base_url } from '@/../config.json';
@@ -9,11 +9,16 @@ export async function connectChat(token: String) {
   socket.onmessage = (event) => {
     const websocketResponse = JSON.parse(event.data);
     if (websocketResponse.type === 'SendChatMessage') {
-      const responseData: ChatMessage = websocketResponse.data;
-      globalState.chatMessages.push(responseData);
+      const chatMessage: ChatMessage = websocketResponse.data;
+      if (!globalState.chatMessages.has(chatMessage.channel_id)) {
+        globalState.chatMessages.set(chatMessage.channel_id, []);
+      }
+      globalState.chatMessages.get(chatMessage.channel_id)?.push(chatMessage);
     }
     else if (websocketResponse.type === 'SendError') {
-      // TODO: Error handling
+      const errorResponse: WebSocketError = websocketResponse.data;
+      console.error(`DEBUG: Websocket error ${errorResponse.status_code}: ${errorResponse.msg}`)
+      // TODO: Actual error handling
     }
   };
   return socket;

@@ -1,3 +1,5 @@
+import type { ReturnUser } from "./user_interfaces";
+
 export interface CreateChatChannelData {
   name?: String,
   channel_type: Number,
@@ -20,7 +22,7 @@ export interface ChatChannel {
   channel_type: String,
   name?: String,
   pinned_messages: Array<String>,
-  subscribers: Array<String>,
+  subscribers: Array<ReturnUser>,
   owner_id: String,
   created_at: Number,
 }
@@ -61,4 +63,9 @@ export interface WebSocketRequest {
 export interface WebSocketResponse {
   type: String,
   data: ChatMessage,
+}
+
+export interface WebSocketError {
+  status_code: Number,
+  msg: String,
 }

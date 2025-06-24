@@ -69,7 +69,7 @@ impl User {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ReturnUser {
     pub id: String,
     pub username: String,

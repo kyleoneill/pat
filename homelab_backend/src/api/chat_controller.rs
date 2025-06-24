@@ -2,10 +2,10 @@ use super::{get_user_from_auth_header, get_user_from_token};
 use crate::api::return_data::ReturnData;
 use crate::error_handler::DbError;
 use crate::models::chat::{
-    chat_channel::{ChatChannel, CreateChannelSchema},
-    chat_channel_db::{get_chat_channel_by_id, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
+    chat_channel::{CreateChannelSchema, ReturnChannel},
+    chat_channel_db::{get_chat_channel_by_id, hydrate_chat_channel_subscribers, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
     message_db::insert_chat_message,
-    packet::{WebSocketRequest, WebSocketResponse, WebSocketError},
+    packet::{WebSocketError, WebSocketRequest, WebSocketResponse},
 };
 use crate::{logger, AppState};
 use axum::{
@@ -41,14 +41,14 @@ async fn create_channel(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(channel_data): Json<CreateChannelSchema>,
-) -> ReturnData<ChatChannel> {
+) -> ReturnData<ReturnChannel> {
     let pool = &app_state.db;
     let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
         Err(e) => return e.into(),
     };
     match insert_chat_channel(pool, &channel_data, user.get_id()).await {
-        Ok(chat_channel) => ReturnData::created(chat_channel),
+        Ok(chat_channel) => ReturnData::created(hydrate_chat_channel_subscribers(pool, chat_channel).await),
         Err(db_err) => db_err.into(),
     }
 }
@@ -62,7 +62,7 @@ async fn channel_subscribe(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(channel_data): Json<ChannelSubscribeSchema>,
-) -> ReturnData<ChatChannel> {
+) -> ReturnData<ReturnChannel> {
     let pool = &app_state.db;
     let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -91,7 +91,7 @@ async fn channel_subscribe(
     };
 
     match update_chat_channel_by_id(pool, channel_data.channel_id.as_str(), filter_doc, update_doc).await {
-        Ok(chat_channel) => ReturnData::ok(chat_channel),
+        Ok(chat_channel) => ReturnData::ok(hydrate_chat_channel_subscribers(pool, chat_channel).await),
         Err(db_err) => db_err.into(),
     }
 }
@@ -100,7 +100,7 @@ async fn channel_unsubscribe(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(channel_data): Json<ChannelSubscribeSchema>,
-) -> ReturnData<ChatChannel> {
+) -> ReturnData<ReturnChannel> {
     let pool = &app_state.db;
     let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -125,7 +125,7 @@ async fn channel_unsubscribe(
     };
 
     match update_chat_channel_by_id(pool, channel_data.channel_id.as_str(), filter_doc, update_doc).await {
-        Ok(chat_channel) => ReturnData::ok(chat_channel),
+        Ok(chat_channel) => ReturnData::ok(hydrate_chat_channel_subscribers(pool, chat_channel).await),
         Err(db_err) => db_err.into(),
     }
 }
@@ -140,7 +140,7 @@ async fn list_channels(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     query_params: Query<ListChannelsQueryParams>,
-) -> ReturnData<Vec<ChatChannel>> {
+) -> ReturnData<Vec<ReturnChannel>> {
     let pool = &app_state.db;
     let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -186,7 +186,14 @@ async fn list_channels(
     };
 
     match list_chat_channels(pool, filter_doc).await {
-        Ok(channels) => ReturnData::ok(channels),
+        Ok(channels) => {
+            let mut return_channels = Vec::new();
+            for channel in channels {
+                let return_channel = hydrate_chat_channel_subscribers(pool, channel).await;
+                return_channels.push(return_channel);
+            }
+            ReturnData::ok(return_channels)
+        }
         Err(db_err) => db_err.into(),
     }
 }

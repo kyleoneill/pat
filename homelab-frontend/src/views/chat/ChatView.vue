@@ -14,15 +14,20 @@
 
   const chatChannels: Ref<Array<ChatChannel>> = ref([]);
   const selectedChannel: Ref<ChatChannel | null> = ref(null);
-  const selectedChannelName: Ref<String | null> = ref(null);
+  let selectedChannelName: String | null = null;
+  let selectedChannelUserMap: Map<String, String> = new Map();
 
   function selectChatChannel(channel: ChatChannel) {
     selectedChannel.value = channel;
+    selectedChannelUserMap = new Map();
+    channel.subscribers.forEach(subscriber => {
+      selectedChannelUserMap.set(subscriber.id, subscriber.username);
+    });
     if (channel.name === null) {
-      selectedChannelName.value = channel.slug;
+      selectedChannelName = channel.slug;
     }
     else {
-      selectedChannelName.value = channel.name as String;
+      selectedChannelName = channel.name as String;
     }
     // TODO: LOAD THE CHAT - SEND WEBSOCKET ReceiveChatUpdateRequest PACKET
   }
@@ -79,8 +84,7 @@
       <hr />
       <div v-for="(channel, index) in chatChannels" :key="index" class="channel-listing">
         <a @click="selectChatChannel(channel)">
-          <span v-if="channel.name !== null">{{ channel.name }}</span>
-          <span v-else>{{ channel.slug }}</span>
+          <span> {{ channel.name || channel.slug }}</span>
         </a>
       </div>
     </div>
@@ -88,8 +92,8 @@
       <div class="chat-area" v-if="selectedChannel !== null">
         <h2>{{ selectedChannelName }}</h2>
         <div class="messages-area">
-          <div v-for="(message, index) in globalState.chatMessages" :key="index">
-            <div>{{ message.author_id }} - {{ message.contents }}</div>
+          <div v-for="(message, index) in globalState.chatMessages.get(selectedChannel._id)" :key="index">
+            <div>{{ selectedChannelUserMap.get(message.author_id) || message.author_id }} - {{ message.contents }}</div>
           </div>
         </div>
         <MessageInput class="message-input" @send-message="sendMessage"/>

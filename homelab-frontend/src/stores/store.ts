@@ -7,7 +7,7 @@ interface State {
   setToken: (token: string) => void,
   websocketConnection: WebSocket | null,
   setWebsocketConnection: (connection: WebSocket) => void,
-  chatMessages: Array<ChatMessage>,
+  chatMessages: Map<String, Array<ChatMessage>>,
 }
 
 export const globalState = reactive({
@@ -19,5 +19,5 @@ export const globalState = reactive({
   setWebsocketConnection(connection: WebSocket): void {
     this.websocketConnection = connection;
   },
-  chatMessages: [],
+  chatMessages: new Map(),
 } as State)

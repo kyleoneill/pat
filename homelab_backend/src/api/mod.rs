@@ -16,7 +16,7 @@ use crate::models::user::User;
 
 async fn get_user(pool: &Database, maybe_user_id: Result<String, String>) -> Result<User, ServerError> {
     match maybe_user_id {
-        Ok(user_id) => match db_get_user_by_id(pool, user_id).await {
+        Ok(user_id) => match db_get_user_by_id(pool, user_id.as_str()).await {
             Ok(user) => Ok(user),
             Err(e) => match e {
                 DbError::NotFound(resource_kind, identifier) => Err(ServerError::FailedAuthentication(format!(
