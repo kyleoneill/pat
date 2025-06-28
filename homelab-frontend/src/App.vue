@@ -24,9 +24,9 @@
 
     // Verify that the token is still valid
     getUserMe()
-      .then(
-        // We don't care about the response data, just that the response succeeded
-      ).catch(error => {
+      .then(getUserResponse => {
+        globalState.setCurrentUser(getUserResponse.data);
+      }).catch(error => {
         if(error.response.status_code !== 401) {
           // We got an unexpected error
         }

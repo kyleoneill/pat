@@ -21,7 +21,11 @@ export async function connectChat(token: String) {
       // TODO: Actual error handling
     }
   };
-  return socket;
+  socket.onclose = (event) => {
+    // How do I know if I initiated this, or if the server did? If the server initiated, we want to try to re-start it again
+    globalState.setWebsocketConnection(null);
+  };
+  globalState.setWebsocketConnection(socket);
 }
 
 export async function createChatChannel(channelData: CreateChatChannelData) {

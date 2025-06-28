@@ -2,10 +2,11 @@
   import type { Ref } from 'vue';
   import type { ChatChannel } from '@/models/chat_interfaces';
 
-  import { ref } from 'vue';
+  import { nextTick, ref, useTemplateRef, watch } from 'vue';
   import { globalState } from '@/stores/store';
   import { connectChat, listChatChannels } from '@/api/chat_api';
   import useToasterStore from '@/stores/useToasterStore';
+  import ChatMessage from '@/components/chat/ChatMessage.vue';
   import MessageInput from '@/components/chat/MessageInput.vue';
 
   const toasterStore = useToasterStore();
@@ -16,6 +17,8 @@
   const selectedChannel: Ref<ChatChannel | null> = ref(null);
   let selectedChannelName: String | null = null;
   let selectedChannelUserMap: Map<String, String> = new Map();
+
+  const scrollableArea = useTemplateRef('scrollable-area');
 
   function selectChatChannel(channel: ChatChannel) {
     selectedChannel.value = channel;
@@ -45,8 +48,8 @@
 
   function establishWebsocketConnection() {
     loading.value = true;
-    connectChat(globalState.token).then(socket => {
-      globalState.setWebsocketConnection(socket);
+    connectChat(globalState.token).then(() => {
+      // This no longer returns anything?
     }).catch(_error => {
       toasterStore.responseError({error: "Failed to establish WebSocket connection to server"});
     }).finally(() => {
@@ -66,6 +69,18 @@
     }
   }
 
+  // Is this the most optimal way to do this?
+  // Watch global state, when it changes we assume that we have a new message
+  watch(globalState, (_newState, _oldState) => {
+    // Wait a tick to ensure the DOM has been updated with the new message
+    nextTick(() => {
+      if (scrollableArea.value) {
+        // Scroll to the bottom of the chat area, so the new message is visible
+        scrollableArea.value.scrollTop = scrollableArea.value?.scrollHeight;
+      }
+    });
+  });
+
   // TODO:
   //  - load messages for a chat on chat select
   //  - send/receive messages in the chat section
@@ -77,6 +92,7 @@
 
 <template>
   <div class="chat-container">
+    <div v-if="globalState.websocketConnection === null">DEBUG: WS CONNECTION IS CLOSED</div>
     <div class="channel-list">
       <div>
         <a>Create Channel</a>
@@ -91,9 +107,16 @@
     <div>
       <div class="chat-area" v-if="selectedChannel !== null">
         <h2>{{ selectedChannelName }}</h2>
-        <div class="messages-area">
+        <div ref="scrollable-area" class="messages-area">
           <div v-for="(message, index) in globalState.chatMessages.get(selectedChannel._id)" :key="index">
-            <div>{{ selectedChannelUserMap.get(message.author_id) || message.author_id }} - {{ message.contents }}</div>
+            <div v-if="index === 0 || (globalState.chatMessages.has(selectedChannel._id) && globalState.chatMessages.get(selectedChannel._id)[index - 1].author_id !== message.author_id)">
+              {{ selectedChannelUserMap.get(message.author_id) || message.author_id }}
+            </div>
+            <chat-message
+              :chatMessage="message"
+              :authorUsername="selectedChannelUserMap.get(message.author_id) || message.author_id"
+              :sent="globalState.currentUser?.id === message.author_id"
+            />
           </div>
         </div>
         <MessageInput class="message-input" @send-message="sendMessage"/>
@@ -102,7 +125,7 @@
   </div>
 </template>
 
-<style scoped>
+<style>
   .chat-container {
     display: flex;
   }
@@ -134,6 +157,8 @@
 
   .messages-area {
     flex-grow: 1;
+    overflow: auto;
+    flex-direction: column-reverse;
   }
 
   .message-input {
