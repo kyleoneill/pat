@@ -86,6 +86,7 @@ pub struct ChatChannel {
     pub subscribers: Vec<String>,     // Vec of user IDs
     pub owner_id: String,
     pub created_at: i64,
+    pub most_recent_message_id: i64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -95,10 +96,13 @@ pub struct ReturnChannel {
     #[serde(deserialize_with = "deserialize_channel_type")]
     pub channel_type: ChannelType,
     pub name: Option<String>,
+    // TODO: Replace pinned_messages with a Vec<ChatMessage> when returning maybe?
     pub pinned_messages: Vec<String>, // Vec of message IDs
     pub subscribers: Vec<ReturnUser>,
+    // TODO: Replace owner_id with a ReturnUser when returning
     pub owner_id: String,
     pub created_at: i64,
+    pub most_recent_message_id: i64,
 }
 
 impl From<ChatChannel> for ReturnChannel {
@@ -108,12 +112,11 @@ impl From<ChatChannel> for ReturnChannel {
             slug: value.slug,
             channel_type: value.channel_type,
             name: value.name,
-            // TODO: Replace this with a Vec<ChatMessage> maybe?
             pinned_messages: value.pinned_messages,
             subscribers: Vec::new(),
-            // TODO: Replace this with a User
             owner_id: value.owner_id,
             created_at: value.created_at,
+            most_recent_message_id: value.most_recent_message_id,
         }
     }
 }

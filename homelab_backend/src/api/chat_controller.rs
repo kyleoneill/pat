@@ -4,8 +4,8 @@ use crate::error_handler::DbError;
 use crate::models::chat::{
     chat_channel::{CreateChannelSchema, ReturnChannel},
     chat_channel_db::{get_chat_channel_by_id, hydrate_chat_channel_subscribers, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
-    message_db::insert_chat_message,
-    packet::{WebSocketError, WebSocketRequest, WebSocketResponse},
+    message_db::{get_chat_message_span, insert_chat_message},
+    packet::{WebSocketRequest, WebSocketResponse},
 };
 use crate::{logger, AppState};
 use axum::{
@@ -229,6 +229,8 @@ async fn chat_connect(
 }
 
 async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app_state: Arc<AppState>) {
+    // TODO: This function is way too large and should be broken up
+
     // Create a channel to send messages
     let (tx, mut rx) = mpsc::unbounded_channel::<WebSocketResponse>();
 
@@ -248,8 +250,6 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
 
     let (mut sender, mut receiver) = socket.split();
 
-    // TODO: Response to connection being established - send most recent message id in subscribed channels?
-
     // Spawn a task to receive messages from the socket
     let user_id_read_task = user_id.clone();
     let cloned_state = app_state.clone();
@@ -268,12 +268,9 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                     Ok(WebSocketRequest::CreateMessage(msg_to_create)) => {
                         // Can this be made more readable
 
-                        // Construct a response that will be sent to the client which sent this request
-                        let mut websocket_error = WebSocketError::new();
-
                         // Verify that the message is being sent to a valid channel that the sender is in
                         let channel_id = msg_to_create.channel_id.as_str();
-                        match get_chat_channel_by_id(&cloned_state.db, channel_id).await {
+                        let maybe_response: Option<WebSocketResponse> = match get_chat_channel_by_id(&cloned_state.db, channel_id).await {
                             Ok(channel) => {
                                 // Verify that the current user is a subscriber of the channel
                                 if channel.subscribers.contains(&user_id_read_task) {
@@ -286,33 +283,25 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                                                     let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
                                                 }
                                             }
+                                            None
                                         }
-                                        Err(_) => {
-                                            websocket_error.status_code = 500;
-                                            websocket_error.msg.push_str("Failed to create a chat message with an unknown reason");
-                                        }
+                                        Err(_e) => Some(WebSocketResponse::ws_error(500, "Unhandled failure while creating a chat message")),
                                     }
                                 } else {
-                                    websocket_error.status_code = 400;
-                                    websocket_error.msg.push_str("You are not in this chat channel");
+                                    Some(WebSocketResponse::ws_error(400, "You are not in this chat channel"))
                                 }
                             }
                             Err(_) => {
-                                // TODO: Actual error handling
-                                //       Also the way `ack` is being build here sucks. Status should be
-                                //       using an enum, this should probably be set in a mut ref method like
-                                //       fn set_act(&mut self, status: Status, msg: &str)
-                                websocket_error.status_code = 404;
-                                websocket_error.msg.push_str("Chat channel does not exist");
+                                // TODO: Actual error handling, status code should be an enum
+                                Some(WebSocketResponse::ws_error(404, "Chat channel does not exist"))
                             }
-                        }
+                        };
 
-                        // If we hit an error, let the client know
-                        if websocket_error.status_code > 200 {
+                        if let Some(response) = maybe_response {
                             let connections = cloned_state.active_connections.read().await;
                             match connections.get(user_id_read_task.as_str()) {
                                 Some(tx) => {
-                                    let _ = tx.send(WebSocketResponse::SendError(websocket_error));
+                                    let _ = tx.send(response);
                                 }
                                 None => {
                                     // Currently active connection is gone, log this?
@@ -321,20 +310,40 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                         }
                     }
                     Ok(WebSocketRequest::GetChatState(msg_request)) => {
-                        println!("DEBUG ReceiveChatUpdateRequest: {:?}", msg_request);
-                        // TODO: Implement a chat update, will need to be paginated and maybe
-                        //       take a mongo cursor object as a param/arg
-                        // Get messages from db
-                        // Send messages to the requestor
-
-                        // TEMP EXAMPLE OF WHAT THIS LOOKS LIKE
-                        // let connections = state_clone.connections.lock().await;
-                        // if let Some(tx) = connections.get(&user_id) {
-                        //     let _ = tx.send(history);
-                        // }
+                        let get_chat_state_res: WebSocketResponse =
+                            match get_chat_channel_by_id(&cloned_state.db, msg_request.channel_id.as_str()).await {
+                                // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
+                                //       abstracted better
+                                Ok(channel) => {
+                                    if channel.subscribers.contains(&user_id_read_task) {
+                                        match get_chat_message_span(
+                                            &cloned_state.db,
+                                            msg_request.atomic_message_id,
+                                            msg_request.channel_id.as_str(),
+                                            msg_request.message_count,
+                                        )
+                                        .await
+                                        {
+                                            Ok(messages) => WebSocketResponse::SendChatState(messages),
+                                            Err(_e) => WebSocketResponse::ws_error(500, "Unhandled error while reading chat messages"),
+                                        }
+                                    } else {
+                                        WebSocketResponse::ws_error(400, "You are not in this chat channel")
+                                    }
+                                }
+                                Err(_e) => WebSocketResponse::ws_error(500, "Unhandled error while getting chat channel"),
+                            };
+                        let connections = cloned_state.active_connections.read().await;
+                        match connections.get(user_id_read_task.as_str()) {
+                            Some(tx) => {
+                                let _ = tx.send(get_chat_state_res);
+                            }
+                            None => {
+                                // Currently active connection is gone, log this?
+                            }
+                        };
                     }
-                    Err(e) => {
-                        println!("{:?}", e);
+                    Err(_e) => {
                         // TODO: Handle error
                         //       Send a SendErrorMessage to tx?
                         logger::log_msg("Error while deserializing a websocket packet from a string");

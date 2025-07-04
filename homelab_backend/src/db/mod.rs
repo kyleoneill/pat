@@ -1,6 +1,7 @@
 pub mod resource_kinds;
 
 use crate::models::chat::chat_channel::ChatChannel;
+use crate::models::chat::message::ChatMessage;
 use crate::models::games::ConnectionGame;
 use crate::models::reminder::Category;
 use crate::models::user::user_db::db_create_user;
@@ -38,6 +39,7 @@ pub async fn check_indexes(database: &Database) {
     check_category_indexes(database).await;
     check_connections_game_indexes(database).await;
     check_chat_channel_indexes(database).await;
+    check_chat_message_indexes(database).await;
 }
 
 pub async fn check_user_indexes(database: &Database) {
@@ -160,4 +162,40 @@ pub async fn create_chat_channels_indexes(chat_channels_collection: Collection<C
         .create_index(category_index)
         .await
         .expect("Failed to create a slug_and_owner_id index on the chat_channels collection");
+}
+
+pub async fn check_chat_message_indexes(database: &Database) {
+    let chat_messages_collection: Collection<ChatMessage> = database.collection("chat_messages");
+
+    match chat_messages_collection.list_index_names().await {
+        Ok(indexes) => {
+            if !indexes.contains(&"channel_and_atomic_ids".to_owned()) {
+                create_chat_message_indexes(chat_messages_collection).await;
+            }
+        }
+        Err(e) => match *e.kind {
+            ErrorKind::Command(command_error) => match command_error.code {
+                26 => create_chat_message_indexes(chat_messages_collection).await,
+                _ => panic!("Failed to list indexes for chat_messages collection with unknown error during db initialization"),
+            },
+            _ => panic!("Failed to list indexes for chat_messages collection with unknown error during db initialization"),
+        },
+    }
+}
+
+pub async fn create_chat_message_indexes(collection: Collection<ChatMessage>) {
+    let category_index_options = IndexOptions::builder()
+        .unique(true)
+        .name(Some("channel_and_atomic_ids".to_owned()))
+        .build();
+    // atomic_id ordered by -1 which makes it descending. This will put the largest number (the most
+    // recent message) first
+    let category_index = IndexModel::builder()
+        .keys(doc! {"channel_id": 1, "atomic_id": -1})
+        .options(category_index_options)
+        .build();
+    collection
+        .create_index(category_index)
+        .await
+        .expect("Failed to create a channel_and_atomic_ids index on the chat_messages collection");
 }

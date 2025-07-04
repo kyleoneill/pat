@@ -1,6 +1,7 @@
 <script setup lang="ts">
   import type { Ref } from 'vue';
   import type { ChatChannel } from '@/models/chat_interfaces';
+  import type { WebSocketRequest } from '@/models/chat_interfaces';
 
   import { nextTick, ref, useTemplateRef, watch } from 'vue';
   import { globalState } from '@/stores/store';
@@ -21,18 +22,43 @@
   const scrollableArea = useTemplateRef('scrollable-area');
 
   function selectChatChannel(channel: ChatChannel) {
+    if (selectedChannel.value !== null && selectedChannel.value._id === channel._id) {
+      return;
+    }
     selectedChannel.value = channel;
     selectedChannelUserMap = new Map();
     channel.subscribers.forEach(subscriber => {
       selectedChannelUserMap.set(subscriber.id, subscriber.username);
     });
+
+    // If we have a websocket connection, load messages for the newly selected channel
+    if (globalState.websocketConnection !== null) {
+      const channelData: ChatChannel = selectedChannel.value as ChatChannel;
+      // TODO: Might want to re-pull the channel here, as the "most recent message" could be out of date (we do not know
+      //       how long ago the user got this channel)
+      //       Could also send updates to the client when a channel changes, in the same way that messages are sent
+
+      // Verify that we don't already have the data we are about to query for
+      if (globalState.chatMessages.has(channelData._id)) {
+        for (const message of globalState.chatMessages.get(channelData._id)) {
+          if (message.atomic_id === channelData.most_recent_message_id) {
+            return;
+          }
+        }
+      }
+
+      const requestChatState: WebSocketRequest = {
+        "type": "GetChatState",
+        "data": {message_count: 25, atomic_message_id: channelData.most_recent_message_id, channel_id: channelData._id}
+      };
+      globalState.websocketConnection?.send(JSON.stringify(requestChatState));
+    }
     if (channel.name === null) {
       selectedChannelName = channel.slug;
     }
     else {
       selectedChannelName = channel.name as String;
     }
-    // TODO: LOAD THE CHAT - SEND WEBSOCKET ReceiveChatUpdateRequest PACKET
   }
 
   function getChatChannels() {
@@ -59,9 +85,10 @@
 
   function sendMessage(message: String) {
     if (globalState.websocketConnection !== null && globalState.websocketConnection.readyState === WebSocket.OPEN) {
-      const sendMessagePacket = {
+      const channelData: ChatChannel = selectedChannel.value as ChatChannel;
+      const sendMessagePacket: WebSocketRequest = {
         "type": "CreateMessage",
-        "data": {channel_id: selectedChannel.value?._id, contents: message, reply_to: null }
+        "data": {channel_id: channelData._id, contents: message, reply_to: null }
       };
       globalState.websocketConnection.send(JSON.stringify(sendMessagePacket));
     } else {
@@ -80,11 +107,6 @@
       }
     });
   });
-
-  // TODO:
-  //  - load messages for a chat on chat select
-  //  - send/receive messages in the chat section
-  // HANDLE STORING USER ID AND THEN DISCRIMINATING MESSAGES ON IF THEY ARE AUTHORED BY CURRENT USER
 
   getChatChannels();
   establishWebsocketConnection();

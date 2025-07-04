@@ -3,7 +3,7 @@ use crate::util::current_unix_time;
 use mongodb::bson::{doc, Bson, Document};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct EmojiDetails {
     id: String,
     name: String,
@@ -18,7 +18,7 @@ impl From<EmojiDetails> for Bson {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Reactions {
     count: i64,
     emoji: EmojiDetails,
@@ -41,7 +41,7 @@ pub struct CreateMessageSchema {
 }
 
 impl CreateMessageSchema {
-    pub fn create_message_doc(self, user_id: &str) -> Document {
+    pub fn create_message_doc(self, user_id: &str, atomic_id: i64) -> Document {
         let current_time = current_unix_time();
         let mut doc = doc! {
             "channel_id": self.channel_id,
@@ -51,6 +51,7 @@ impl CreateMessageSchema {
             "contents": self.contents,
             "reactions": Vec::<Reactions>::new(),
             "pinned": false,
+            "atomic_id": atomic_id,
         };
         if self.reply_to.is_some() {
             doc.insert(
@@ -65,7 +66,7 @@ impl CreateMessageSchema {
 // TODO: How to handle attachments? What if the user wants to upload an image/gif with a message?
 //       A message should be able to have text content _and_ an attachment (so the attachment should not be in `contents`)
 //       and be binary data.
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ChatMessage {
     #[serde(rename = "_id", deserialize_with = "deserialize_id")]
     pub id: String,
@@ -77,4 +78,5 @@ pub struct ChatMessage {
     pub reply_to: Option<String>,
     pub reactions: Vec<Reactions>,
     pub pinned: bool,
+    pub atomic_id: i64,
 }

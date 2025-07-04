@@ -19,6 +19,8 @@ mod chat_testing {
         - user-1 send a message to a channel i am not subscribed to
         - user-1 send a message to a channel i am in
         - user-2 read a message from channel i am subscribed to
+        - message atomic_id increments correctly
+        - most_recent_message_id increments correctly
         - unsubscribe from channel I am in
         - unsubscribe from a channel that does not exist
         - delete a channel I do not have perms for
@@ -64,6 +66,7 @@ mod chat_testing {
         assert_eq!(first_channel.pinned_messages.len(), 0);
         assert_eq!(first_channel.subscribers, vec![user.clone().into()]);
         assert_eq!(first_channel.owner_id, user.id.as_str());
+        assert_eq!(first_channel.most_recent_message_id, 0);
 
         // Create a named group-chat channel
         let data_two = CreateChannelSchema {

@@ -47,13 +47,18 @@ export default defineStore("toaster-store", {
     },
 
     responseError(payload: ResponseError) {
-      // error.response.data.msg
-      if(payload.error.response.status < 500) {
-        this.error({text: payload.error.response.data.msg});
+      if (payload.error.response === undefined) {
+        // Websocket failures do not have a response.error
+        this.error({text: payload.error});
       }
       else {
-        // TODO: Console log payload.error.response.data? Is there a guarantee anything will even be there?
-        this.error({text: "Internal Server Error"});
+        if(payload.error.response.status < 500) {
+          this.error({text: payload.error.response.data.msg});
+        }
+        else {
+          // TODO: Console log payload.error.response.data? Is there a guarantee anything will even be there?
+          this.error({text: "Internal Server Error"});
+        }
       }
     },
   },

@@ -25,6 +25,7 @@ export interface ChatChannel {
   subscribers: Array<ReturnUser>,
   owner_id: String,
   created_at: Number,
+  most_recent_message_id: number,
 }
 
 interface EmojiDetails {
@@ -47,22 +48,31 @@ export interface ChatMessage {
   pinned: boolean,
   created_at: number,
   updated_at: number,
+  atomic_id: number,
 }
 
+
+// REQUESTS TO SERVER
 interface SendMessagePacket {
   channel_id: String,
   contents: String,
   reply_to: String | null,
 }
 
+interface RequestMessages {
+  message_count: Number,
+  atomic_message_id: Number,
+  channel_id: String,
+}
+
 export interface WebSocketRequest {
   type: String,
-  data: SendMessagePacket,
+  data: SendMessagePacket | RequestMessages,
 }
 
 export interface WebSocketResponse {
   type: String,
-  data: ChatMessage,
+  data: ChatMessage | Array<ChatChannel> | WebSocketError,
 }
 
 export interface WebSocketError {

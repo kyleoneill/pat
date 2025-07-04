@@ -4,29 +4,17 @@ use super::message::{ChatMessage, CreateMessageSchema};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RequestMessagesSchema {
-    // TODO: Replace this stuff with a mongodb cursor?
-    message_count: i64,
-    starting_message: String,
-    channel_id: String,
+    pub message_count: i64,
+    pub atomic_message_id: i64,
+    pub channel_id: String,
 }
 
 // TODO: Define error codes, maybe just make an enum that serializes to ints?
-#[derive(Clone, Serialize, Deserialize)]
+// TODO: I should have a from/into to convert DbError into a WebSocketError
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct WebSocketError {
     pub status_code: i64,
     pub msg: String,
-}
-
-impl WebSocketError {
-    pub fn new() -> Self {
-        Self {
-            status_code: 0,
-            msg: String::new(),
-        }
-    }
-    pub fn is_error(&self) -> bool {
-        self.status_code >= 400 && self.status_code < 500
-    }
 }
 
 /*
@@ -46,11 +34,21 @@ pub enum WebSocketRequest {
     GetChatState(RequestMessagesSchema),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(tag = "type", content = "data")]
 pub enum WebSocketResponse {
     SendChatMessage(ChatMessage),
+    SendChatState(Vec<ChatMessage>),
     SendError(WebSocketError),
+}
+
+impl WebSocketResponse {
+    pub fn ws_error(status_code: i64, msg: &str) -> WebSocketResponse {
+        WebSocketResponse::SendError(WebSocketError {
+            status_code,
+            msg: msg.to_owned(),
+        })
+    }
 }
 
 // TODO: React to message packet (receive and send)

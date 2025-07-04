@@ -27,6 +27,7 @@ pub async fn insert_chat_channel(pool: &Database, data: &CreateChannelSchema, us
         ],
         "owner_id": user_id.clone(),
         "created_at": date_time,
+        "most_recent_message_id": 0,
     };
     match collection.insert_one(doc).await {
         Ok(_res) => (),

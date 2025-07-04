@@ -15,6 +15,15 @@ export async function connectChat(token: String) {
       }
       globalState.chatMessages.get(chatMessage.channel_id)?.push(chatMessage);
     }
+    else if (websocketResponse.type === 'SendChatState') {
+      const chatMessages: Array<ChatMessage> = websocketResponse.data;
+      chatMessages.forEach(message => {
+        if (!globalState.chatMessages.has(message.channel_id)) {
+          globalState.chatMessages.set(message.channel_id, []);
+        }
+        globalState.chatMessages.get(message.channel_id)?.push(message);
+      });
+    }
     else if (websocketResponse.type === 'SendError') {
       const errorResponse: WebSocketError = websocketResponse.data;
       console.error(`DEBUG: Websocket error ${errorResponse.status_code}: ${errorResponse.msg}`)
