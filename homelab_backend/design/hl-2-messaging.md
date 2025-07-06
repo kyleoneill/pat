@@ -60,6 +60,7 @@ struct Message {
   reactions: Vec<Reactions>,
   pinned: Bool, // Is this message pinned in the current channel?
   attachments: Vec<Attachment>, // If this message has attached media, like an image or video
+  atomic_id: i64,
 }
 
 // Channel
@@ -76,6 +77,7 @@ struct Channel {
   message_count: i64,
   pinned_messages: Vec<String>,
   subscribers: Vec<String>, // Vec of user IDs subscribed to this channel
+  latest_message_atomic_id: i64,
 }
 ```
 
@@ -109,10 +111,7 @@ pub struct AppState {
 
 ### Websocket Packets
 The server will send and receive packets over websocket connections. Clients will send a packet to create a message, the
-server will send packets to clients when there are new messages for them to receive. When a client establishes a
-connection to the server, the server should send back an object which has an ID for the newest message in each channel
-the user is subscribed to. This will allow the client to know if there are new messages, and they need to update their
-state.
+server will send packets to clients when there are new messages for them to receive.
 
 The server is responsible for providing updates, the client is responsible for populating their history.
 
@@ -128,7 +127,8 @@ pub enum WebSocketRequest {
 #[serde(tag = "type", content = "data")]
 pub enum WebSocketResponse {
   SendChatMessage(ChatMessage),
-  SendAck(WebsocketAck),
+  SendChatState(Vec<ChatMessage>),
+  SendError(WebSocketError),
 }
 /*
 #[serde(tag = "type", content = "data")]
@@ -143,7 +143,8 @@ The above will serialize a CreateMessage WebSocketRequest to look like
 ```
 
 There should be a way to populate a chat when a user opens a connection, or to load messages if the user scrolls up in
-a chat. The `ReceiveChatUpdateRequest` packet variant should allow users to request a batch of messages.
+a chat. The `GetChatState` packet variant should allow users to request a batch of messages, which will be sent as
+a `SendChatState`.
 
 ### Broadcasting
 Messages will need to be broadcast to all relevant clients, an example flow would look like this
@@ -158,6 +159,18 @@ Messages will need to be broadcast to all relevant clients, an example flow woul
     - Check if it has an active connection with users 2 and 3
     - Sends the message to each user with an active connection
 ```
+
+### Atomic ID
+Channels will store a numeric ID referencing the number of messages sent on that channel. Every time a message creation
+request is received, the following will occur:
+- Channel the message is being sent to is checked for its current "message count ID"
+- The "message count ID" is incremented and then stored on the message as its numeric ID
+- The channel is updated to store this new incremented ID
+
+This ID will allow messages to be stored/sorted in a chronologic order (even if two messages are sent in the same
+second) and will make it easier to request/receive a span of messages. As an example, if a client wants the 25 most
+recent messages, and the channel's numeric ID is at 50, then the user can send a packet requesting message 50
+and the server can grab all messages with IDs in the range of 25 (exclusive) to 50 (inclusive). 
 
 ## Frontend
 A messaging section must be added to the application. This section will allow a user to search for other users who they

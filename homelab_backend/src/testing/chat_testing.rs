@@ -1,31 +1,17 @@
 #[cfg(test)]
 mod chat_testing {
+    use futures::SinkExt;
+    use tokio_tungstenite::tungstenite;
     use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
     use crate::testing::TestHelper;
     use hyper::StatusCode;
 
-    use crate::models::chat::chat_channel::{ChannelType, CreateChannelSchema};
-    use crate::testing::helpers::chat_helpers::{create_chat_channel, list_channels, subscribe_to_channel, unsubscribe_from_channel};
-
-    /*
-      TESTING
-        - create channel
-        - create second channel
-        - ws connect user-1
-        - user-1 subscribe to channel 1
-        - ws connect user-2, subscribe to channel 1
-        - try to subscribe to a channel that does not exist
-        - user-1 send a message to a channel that does not exist
-        - user-1 send a message to a channel i am not subscribed to
-        - user-1 send a message to a channel i am in
-        - user-2 read a message from channel i am subscribed to
-        - message atomic_id increments correctly
-        - most_recent_message_id increments correctly
-        - unsubscribe from channel I am in
-        - unsubscribe from a channel that does not exist
-        - delete a channel I do not have perms for
-        - delete a channel I do have perms for
-    */
+    use crate::models::chat::{
+        packet::WebSocketRequest,
+        message::CreateMessageSchema,
+        chat_channel::{ChannelType, CreateChannelSchema}
+    };
+    use crate::testing::helpers::chat_helpers::{create_chat_channel, list_channels, receive_chat_message, subscribe_to_channel, unsubscribe_from_channel};
 
     #[tokio::test]
     async fn chat_channels_crud() {
@@ -194,5 +180,99 @@ mod chat_testing {
 
         // TODO: Delete channel
         // TODO: Try to delete a channel not owned by me
+    }
+
+    #[tokio::test]
+    async fn chat_messages_basic() {
+        // TODO: If I add any more chat tests I should probably have a helper that creates a chat
+        //       channel or two with some users and tokens, this is a lot of lines of setup
+        let helper = TestHelper::init().await;
+        let client = &helper.client;
+        let addr = &helper.address;
+
+        let username = "foo";
+        let password = "foo";
+
+        let username_two = "second";
+        let password_two = "second";
+
+        // Create users
+        create_user(client, username, password, addr).await.unwrap();
+        create_user(client, username_two, password_two, addr).await.unwrap();
+
+        // Get tokens for the users
+        let token = auth_user(client, username, password, addr).await.unwrap();
+        let second_token = auth_user(client, username_two, password_two, addr).await.unwrap();
+
+        // Get our user so we have their id
+        let user = get_user_me(client, token.as_str(), addr).await.unwrap();
+        let user_two = get_user_me(client, second_token.as_str(), addr).await.unwrap();
+
+        // Create two channels, owned by different users
+        let data = CreateChannelSchema {
+            name: Some("First Channel".to_owned()),
+            channel_type: 0,
+            slug: "first_channel".to_string(),
+        };
+        let first_channel = create_chat_channel(client, addr, token.as_str(), &data)
+            .await
+            .expect("Failed to create a chat channel");
+        let data_two = CreateChannelSchema {
+            name: Some("Second Channel".to_owned()),
+            channel_type: 0,
+            slug: "second_channel".to_string(),
+        };
+        let second_channel = create_chat_channel(client, addr, second_token.as_str(), &data_two)
+            .await
+            .expect("Failed to create a second chat channel");
+
+        // Subscribe to the first channel with the second user
+        subscribe_to_channel(client, addr, second_token.as_str(), first_channel._id.as_str())
+            .await
+            .expect("Failed to subscribe to another users chat channel");
+
+        // Open a websocket connection with the first user for chatting
+        let (mut first_socket, _response) =
+            tokio_tungstenite::connect_async(format!("ws://{}/api/chat/ws?auth_token={}", addr, token.as_str()))
+                .await
+                .expect("Failed to open a ws connection with first user");
+
+        // Create a message as the first user
+        let create_message = WebSocketRequest::CreateMessage(
+            CreateMessageSchema{ channel_id: first_channel._id.clone(), contents: "Test Message".to_owned(), reply_to: None }
+        );
+        let serialized = serde_json::to_string(&create_message).expect("Failed to serialize CreateMessage");
+        first_socket.send(tungstenite::Message::Text(serialized)).await.expect("Failed to send chat message");
+
+        let chat_message = receive_chat_message(&mut first_socket).await;
+        assert_eq!(chat_message.channel_id.as_str(), first_channel._id.as_str());
+        assert_eq!(chat_message.author_id.as_str(), user.id.as_str());
+        assert_eq!(chat_message.contents.as_str(), "Test Message");
+        assert_eq!(chat_message.reply_to, None);
+        assert_eq!(chat_message.reactions.len(), 0);
+        assert_eq!(chat_message.pinned, false);
+        assert_eq!(chat_message.atomic_id, 1);
+
+
+        /*
+          TESTING
+            - create channel
+            - create second channel
+            - ws connect user-1
+            - user-1 subscribe to channel 1
+            - ws connect user-2, subscribe to channel 1
+            - user-1 send a message to a channel that does not exist
+            - user-1 send a message to a channel i am not subscribed to
+            - user-1 send a message to a channel i am in
+            - user-2 read a message from channel i am subscribed to
+            - request messages
+                - request more messages than exists
+                - request messages from a channel that doesn't exist
+                - request messages from a channel user is not subscribed to
+            - message atomic_id increments correctly
+            - most_recent_message_id increments correctly
+            - delete a channel I do not have perms for
+            - delete a channel I do have perms for
+        */
     }
 }
