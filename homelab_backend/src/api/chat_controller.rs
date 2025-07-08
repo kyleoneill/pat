@@ -14,6 +14,7 @@ use axum::{
         connect_info::ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade},
         Query, State,
+        Path,
     },
     http::{header::HeaderMap, Response, StatusCode},
     response::IntoResponse,
@@ -35,6 +36,7 @@ pub fn chat_routes() -> Router<Arc<AppState>> {
         .route("/chat/channels", get(list_channels))
         .route("/chat/channels/subscribe", put(channel_subscribe))
         .route("/chat/channels/unsubscribe", put(channel_unsubscribe))
+        .route("/chat/channels/:channel_id", get(get_channel))
 }
 
 async fn create_channel(
@@ -195,6 +197,22 @@ async fn list_channels(
             ReturnData::ok(return_channels)
         }
         Err(db_err) => db_err.into(),
+    }
+}
+
+async fn get_channel(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(channel_id): Path<String>,
+) -> ReturnData<ReturnChannel> {
+    let pool = &app_state.db;
+    let _user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
+        Ok(user) => user,
+        Err(e) => return e.into(),
+    };
+    match get_chat_channel_by_id(pool, channel_id.as_str()).await {
+        Ok(channel) => ReturnData::ok(channel.into()),
+        Err(db_err) => db_err.into()
     }
 }
 

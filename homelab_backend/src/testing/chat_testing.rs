@@ -1,17 +1,17 @@
 #[cfg(test)]
 mod chat_testing {
-    use futures::SinkExt;
-    use tokio_tungstenite::tungstenite;
-    use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
-    use crate::testing::TestHelper;
+    use crate::testing::{
+        helpers::user_helpers::{auth_user, create_user, get_user_me},
+        TestHelper,
+        FAKE_MONGO_ID,
+    };
     use hyper::StatusCode;
 
     use crate::models::chat::{
-        packet::WebSocketRequest,
         message::CreateMessageSchema,
         chat_channel::{ChannelType, CreateChannelSchema}
     };
-    use crate::testing::helpers::chat_helpers::{create_chat_channel, list_channels, receive_chat_message, subscribe_to_channel, unsubscribe_from_channel};
+    use crate::testing::helpers::chat_helpers::{create_chat_channel, list_channels, receive_chat_message, subscribe_to_channel, unsubscribe_from_channel, send_chat_message, get_channel_by_id};
 
     #[tokio::test]
     async fn chat_channels_crud() {
@@ -94,6 +94,20 @@ mod chat_testing {
             ),
         };
 
+        // Try to get a channel that does not exist
+        match get_channel_by_id(client, addr, token.as_str(), FAKE_MONGO_ID).await {
+            Ok(_) => panic!("Getting a channel by a non-existent ID should fail"),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::NOT_FOUND,
+                "Getting a channel by a non-existent ID should 404"
+            ),
+        };
+
+        // Get a chat channel
+        let get_channel = get_channel_by_id(client, addr, token.as_str(), first_channel._id.as_str()).await.expect("Failed to get a chat channel by ID");
+        assert_eq!(get_channel._id.as_str(), first_channel._id.as_str());
+        
         // Subscribe to a channel
         let subscribed_channel = subscribe_to_channel(client, addr, token.as_str(), third_channel._id.as_str())
             .await
@@ -237,13 +251,21 @@ mod chat_testing {
                 .await
                 .expect("Failed to open a ws connection with first user");
 
-        // Create a message as the first user
-        let create_message = WebSocketRequest::CreateMessage(
-            CreateMessageSchema{ channel_id: first_channel._id.clone(), contents: "Test Message".to_owned(), reply_to: None }
-        );
-        let serialized = serde_json::to_string(&create_message).expect("Failed to serialize CreateMessage");
-        first_socket.send(tungstenite::Message::Text(serialized)).await.expect("Failed to send chat message");
+        // Open a websocket connection with the second user for chatting
+        let (mut second_socket, _second_response) =
+            tokio_tungstenite::connect_async(format!("ws://{}/api/chat/ws?auth_token={}", addr, second_token.as_str()))
+                .await
+                .expect("Failed to open a ws connection with second user");
 
+        // ----------------------------------
+        // Test receiving a broadcast
+
+        // Create a message as the first user
+        let message_data = CreateMessageSchema{ channel_id: first_channel._id.clone(), contents: "Test Message".to_owned(), reply_to: None };
+        send_chat_message(&mut first_socket, message_data).await;
+
+        // After the first user creates a message, both users should receive it as a broadcast
+        // Wrap this in a timeout to prevent the test from hanging if the socket never receives data
         let chat_message = receive_chat_message(&mut first_socket).await;
         assert_eq!(chat_message.channel_id.as_str(), first_channel._id.as_str());
         assert_eq!(chat_message.author_id.as_str(), user.id.as_str());
@@ -253,26 +275,56 @@ mod chat_testing {
         assert_eq!(chat_message.pinned, false);
         assert_eq!(chat_message.atomic_id, 1);
 
+        let chat_message_user_two = receive_chat_message(&mut second_socket).await;
+        // Can prob just impl PartialEq for ChatMessage and then assert that chat_message == chat_message_user_two
+        assert_eq!(chat_message_user_two.channel_id.as_str(), first_channel._id.as_str());
+        assert_eq!(chat_message_user_two.author_id.as_str(), user.id.as_str());
+        assert_eq!(chat_message_user_two.contents.as_str(), "Test Message");
+        assert_eq!(chat_message_user_two.reply_to, None);
+        assert_eq!(chat_message_user_two.reactions.len(), 0);
+        assert_eq!(chat_message_user_two.pinned, false);
+        assert_eq!(chat_message_user_two.atomic_id, 1);
+
+        // ----------------------------------
+        // Test not receiving a broadcast when a message is sent in a channel a user is not a part of
+
+        // Send a chat message as the second user to a channel only they are subscribed in
+        let user_two_unique_message = CreateMessageSchema{ channel_id: second_channel._id.clone(), contents: "Secret Message".to_owned(), reply_to: None };
+        send_chat_message(&mut second_socket, user_two_unique_message).await;
+
+        // Receive a message as the second user to clear out their socket
+        receive_chat_message(&mut second_socket).await;
+
+        // Send a message as the first user in a channel both users are in, just to generate a
+        // broadcast for themselves
+        let message_data = CreateMessageSchema{ channel_id: first_channel._id.clone(), contents: "Another message from me".to_owned(), reply_to: None };
+        send_chat_message(&mut first_socket, message_data).await;
+
+        // Receive a message as the second user again to clear their socket
+        receive_chat_message(&mut second_socket).await;
+
+        // Receive a message as the first user, verify that this is the message they just sent
+        // and is not the message the second user sent in their channel to themselves. The
+        // websocket is a FIFO queue so this means they did not get the first broadcast
+        let user_one_message = receive_chat_message(&mut first_socket).await;
+        assert_eq!(user_one_message.channel_id.as_str(), first_channel._id.as_str());
+
+        // Assert that the second message on the first channel has an atomic ID of 2
+        assert_eq!(user_one_message.atomic_id, 2);
+
+        // Get the first channel, assert that its most recent message ID has been updated
+        let updated_first_channel = get_channel_by_id(client, addr, token.as_str(), first_channel._id.as_str()).await.expect("Failed to get a chat channel by ID");
+        assert_eq!(updated_first_channel.most_recent_message_id, 2);
+
 
         /*
           TESTING
-            - create channel
-            - create second channel
-            - ws connect user-1
-            - user-1 subscribe to channel 1
-            - ws connect user-2, subscribe to channel 1
             - user-1 send a message to a channel that does not exist
             - user-1 send a message to a channel i am not subscribed to
-            - user-1 send a message to a channel i am in
-            - user-2 read a message from channel i am subscribed to
             - request messages
                 - request more messages than exists
                 - request messages from a channel that doesn't exist
                 - request messages from a channel user is not subscribed to
-            - message atomic_id increments correctly
-            - most_recent_message_id increments correctly
-            - delete a channel I do not have perms for
-            - delete a channel I do have perms for
         */
     }
 }

@@ -22,6 +22,9 @@ use serde::Serialize;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
+// This ID is almost guaranteed to never exist :)
+const FAKE_MONGO_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaa";
+
 pub struct TestHelper {
     pub client: Client<HttpConnector, Body>,
     pub address: SocketAddr,
