@@ -1,25 +1,16 @@
-use futures::{
-    StreamExt,
-    SinkExt,
-};
+use crate::models::chat::chat_channel::{CreateChannelSchema, ReturnChannel};
+use crate::models::chat::message::ChatMessage;
+use crate::models::chat::packet::{WebSocketError, WebSocketRequest, WebSocketResponse};
 use crate::testing::helpers::{get_request, post_request, put_request};
 use axum::body::Body;
 use axum::http::StatusCode;
+use futures::{SinkExt, StreamExt};
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use serde_json::json;
-use std::{
-    net::SocketAddr,
-    time::Duration,
-};
-use tokio::{
-    net::TcpStream,
-    time::timeout,
-};
+use std::{net::SocketAddr, time::Duration};
+use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
-use crate::models::chat::chat_channel::{CreateChannelSchema, ReturnChannel};
-use crate::models::chat::message::{ChatMessage, CreateMessageSchema};
-use crate::models::chat::packet::{WebSocketRequest, WebSocketResponse};
 
 pub async fn create_chat_channel(
     client: &Client<HttpConnector, Body>,
@@ -71,44 +62,65 @@ pub async fn get_channel_by_id(
     get_request(client, path.as_str(), token, addr).await
 }
 
-// Wrap the function which actually gets the message in a timeout so we panic if there is no data
-// in the socket, rather than hang endlessly
-pub async fn receive_chat_message(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> ChatMessage {
-    match timeout(Duration::from_secs(10), get_message_from_socket(socket)).await {
-        Ok(chat_message) => chat_message,
-        Err(_) => panic!("Failed to receive a chat message on a websocket client")
+pub async fn receive_chat_message(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> Result<ChatMessage, WebSocketError> {
+    match guarded_receive_data_from_socket(socket).await {
+        WebSocketResponse::SendChatMessage(chat_message) => Ok(chat_message),
+        WebSocketResponse::SendError(ws_err) => Err(ws_err),
+        _ => panic!("Should only receive SendChatMessage or SendError when getting a chat message"),
     }
 }
 
-async fn get_message_from_socket(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> ChatMessage {
+pub async fn receive_chat_state(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> Result<Vec<ChatMessage>, WebSocketError> {
+    match guarded_receive_data_from_socket(socket).await {
+        WebSocketResponse::SendChatState(chat_messages) => Ok(chat_messages),
+        WebSocketResponse::SendError(ws_err) => Err(ws_err),
+        _ => panic!("Should only receive SendChatState or SendError when getting chat state"),
+    }
+}
+
+// Wrap the function which actually gets the message in a timeout so we panic if there is no data
+// in the socket, rather than hang endlessly
+async fn guarded_receive_data_from_socket(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> WebSocketResponse {
+    match timeout(Duration::from_secs(10), receive_data_from_socket(socket)).await {
+        Ok(ws_response_data) => ws_response_data,
+        Err(_) => panic!("Failed to receive a chat message on a websocket client"),
+    }
+}
+
+async fn receive_data_from_socket(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> WebSocketResponse {
     match socket.next().await {
         Some(server_res) => match server_res {
             Ok(server_message) => match server_message {
-                tungstenite::Message::Text(msg) => {
-                    match serde_json::from_str::<WebSocketResponse>(msg.as_str()).expect("Failed to deserialize chat creation response into a WebSocketResponse") {
-                        WebSocketResponse::SendChatMessage(chat_message) => chat_message,
-                        _ =>  panic!("WebSocketResponse to a chat creation must be a SendChatMessage")
-                    }
-                },
-                _ => panic!("Server should respond with a Message::Text variant when creating a chat message"),
+                tungstenite::Message::Text(msg) => serde_json::from_str::<WebSocketResponse>(msg.as_str())
+                    .expect("Failed to deserialize chat creation response into a WebSocketResponse"),
+                _ => panic!("Server should respond with a Message::Text variant when receiving data"),
             },
-            Err(e) => panic!("Server responded to a chat creation with error: {e}"),
+            Err(e) => panic!("Server responded with error: {e}"),
         },
-        None => panic!("Failed to get a response from the server after creating a chat message"),
+        None => panic!("Failed to get a response from the server when one was expected"),
     }
 }
 
 // Wrap the function which actually sends the message in a timeout so we panic if the async
 // operation fails
-pub async fn send_chat_message(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, message_data: CreateMessageSchema) {
-    match timeout(Duration::from_secs(10), send_message_over_socket(socket, message_data)).await {
+pub async fn send_websocket_request(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, data: &WebSocketRequest) {
+    match timeout(Duration::from_secs(10), send_data_over_socket(socket, data)).await {
         Ok(()) => (),
-        Err(_) => panic!("Failed to send a chat message on a websocket client")
+        Err(_) => panic!("Failed to send data on a websocket client"),
     }
 }
 
-async fn send_message_over_socket(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, message_data: CreateMessageSchema) {
-    let ws_data = WebSocketRequest::CreateMessage(message_data);
-    let serialized = serde_json::to_string(&ws_data).expect("Failed to serialize WebSocketRequest::CreateMessage");
-    socket.send(tungstenite::Message::Text(serialized)).await.expect("Failed to send chat message over a websocket");
+async fn send_data_over_socket(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, data: &WebSocketRequest) {
+    let serialized = serde_json::to_string(data).expect("Failed to serialize WebSocketRequest");
+    socket
+        .send(tungstenite::Message::Text(serialized))
+        .await
+        .expect("Failed to send data over a websocket");
+}
+
+pub async fn send_arbitrary_data(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, data: String) {
+    match timeout(Duration::from_secs(10), socket.send(tungstenite::Message::Text(data))).await {
+        Ok(_) => (),
+        Err(_) => panic!("Failed to send arbitrary data over the websocket"),
+    }
 }

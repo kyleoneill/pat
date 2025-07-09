@@ -13,8 +13,7 @@ use axum::{
     extract::{
         connect_info::ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Query, State,
-        Path,
+        Path, Query, State,
     },
     http::{header::HeaderMap, Response, StatusCode},
     response::IntoResponse,
@@ -200,11 +199,7 @@ async fn list_channels(
     }
 }
 
-async fn get_channel(
-    State(app_state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    Path(channel_id): Path<String>,
-) -> ReturnData<ReturnChannel> {
+async fn get_channel(State(app_state): State<Arc<AppState>>, headers: HeaderMap, Path(channel_id): Path<String>) -> ReturnData<ReturnChannel> {
     let pool = &app_state.db;
     let _user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
         Ok(user) => user,
@@ -212,7 +207,7 @@ async fn get_channel(
     };
     match get_chat_channel_by_id(pool, channel_id.as_str()).await {
         Ok(channel) => ReturnData::ok(channel.into()),
-        Err(db_err) => db_err.into()
+        Err(db_err) => db_err.into(),
     }
 }
 
@@ -328,29 +323,35 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                         }
                     }
                     Ok(WebSocketRequest::GetChatState(msg_request)) => {
-                        let get_chat_state_res: WebSocketResponse =
-                            match get_chat_channel_by_id(&cloned_state.db, msg_request.channel_id.as_str()).await {
-                                // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
-                                //       abstracted better
-                                Ok(channel) => {
-                                    if channel.subscribers.contains(&user_id_read_task) {
-                                        match get_chat_message_span(
-                                            &cloned_state.db,
-                                            msg_request.atomic_message_id,
-                                            msg_request.channel_id.as_str(),
-                                            msg_request.message_count,
-                                        )
-                                        .await
-                                        {
-                                            Ok(messages) => WebSocketResponse::SendChatState(messages),
-                                            Err(_e) => WebSocketResponse::ws_error(500, "Unhandled error while reading chat messages"),
+                        let get_chat_state_res: WebSocketResponse = {
+                            // This should be done in a validation step instead of being checked like this
+                            if msg_request.message_count > 50 {
+                                WebSocketResponse::ws_error(400, "Can only request a maximum of 50 messages at a time")
+                            } else {
+                                match get_chat_channel_by_id(&cloned_state.db, msg_request.channel_id.as_str()).await {
+                                    // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
+                                    //       abstracted better
+                                    Ok(channel) => {
+                                        if channel.subscribers.contains(&user_id_read_task) {
+                                            match get_chat_message_span(
+                                                &cloned_state.db,
+                                                msg_request.atomic_message_id,
+                                                msg_request.channel_id.as_str(),
+                                                msg_request.message_count,
+                                            )
+                                            .await
+                                            {
+                                                Ok(messages) => WebSocketResponse::SendChatState(messages),
+                                                Err(_e) => WebSocketResponse::ws_error(500, "Unhandled error while reading chat messages"),
+                                            }
+                                        } else {
+                                            WebSocketResponse::ws_error(400, "You are not in this chat channel")
                                         }
-                                    } else {
-                                        WebSocketResponse::ws_error(400, "You are not in this chat channel")
                                     }
+                                    Err(_e) => WebSocketResponse::ws_error(404, "Chat channel does not exist"),
                                 }
-                                Err(_e) => WebSocketResponse::ws_error(500, "Unhandled error while getting chat channel"),
-                            };
+                            }
+                        };
                         let connections = cloned_state.active_connections.read().await;
                         match connections.get(user_id_read_task.as_str()) {
                             Some(tx) => {
@@ -362,8 +363,17 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                         };
                     }
                     Err(_e) => {
-                        // TODO: Handle error
-                        //       Send a SendErrorMessage to tx?
+                        // Would be nice to give more info to the user here about what failed
+                        let websocket_error = WebSocketResponse::ws_error(400, "Failed to decode received data");
+                        let connections = cloned_state.active_connections.read().await;
+                        match connections.get(user_id_read_task.as_str()) {
+                            Some(tx) => {
+                                let _ = tx.send(websocket_error);
+                            }
+                            None => {
+                                // Currently active connection is gone, log this?
+                            }
+                        };
                         logger::log_msg("Error while deserializing a websocket packet from a string");
                     }
                 }

@@ -3,7 +3,7 @@ use crate::util::current_unix_time;
 use mongodb::bson::{doc, Bson, Document};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EmojiDetails {
     id: String,
     name: String,
@@ -18,7 +18,7 @@ impl From<EmojiDetails> for Bson {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Reactions {
     count: i64,
     emoji: EmojiDetails,
@@ -66,7 +66,7 @@ impl CreateMessageSchema {
 // TODO: How to handle attachments? What if the user wants to upload an image/gif with a message?
 //       A message should be able to have text content _and_ an attachment (so the attachment should not be in `contents`)
 //       and be binary data.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ChatMessage {
     #[serde(rename = "_id", deserialize_with = "deserialize_id")]
     pub id: String,

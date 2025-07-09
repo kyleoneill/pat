@@ -34,6 +34,18 @@ pub enum WebSocketRequest {
     GetChatState(RequestMessagesSchema),
 }
 
+impl From<CreateMessageSchema> for WebSocketRequest {
+    fn from(value: CreateMessageSchema) -> Self {
+        WebSocketRequest::CreateMessage(value)
+    }
+}
+
+impl From<RequestMessagesSchema> for WebSocketRequest {
+    fn from(value: RequestMessagesSchema) -> Self {
+        WebSocketRequest::GetChatState(value)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(tag = "type", content = "data")]
 pub enum WebSocketResponse {
