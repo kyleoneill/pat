@@ -19,6 +19,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 fn id_to_string(bson: Bson) -> Result<String, &'static str> {
     match bson {
         Bson::ObjectId(value) => Ok(value.to_hex()),

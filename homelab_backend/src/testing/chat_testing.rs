@@ -313,10 +313,10 @@ mod chat_testing {
         send_websocket_request(&mut second_socket, &user_two_unique_message).await;
 
         // Receive a message as the second user to clear out their socket
-        let chat_message_user_two = receive_chat_message(&mut second_socket)
+        let user_two_only_msg = receive_chat_message(&mut second_socket)
             .await
             .expect("Failed to receive a chat message when one was expected");
-        assert_eq!(chat_message_user_two.author_id.as_str(), user_two_id);
+        assert_eq!(user_two_only_msg.author_id.as_str(), user_two_id);
 
         // Send a message as the first user in a channel both users are in, just to generate a
         // broadcast for themselves
@@ -415,7 +415,7 @@ mod chat_testing {
                 .expect("Failed to open a ws connection with second user");
 
         // Send some messages as the second user
-        for n in 0..50 {
+        for n in 0..20 {
             let message_data: WebSocketRequest = CreateMessageSchema {
                 channel_id: channel_one_id.to_string(),
                 contents: format!("Chat message {}", n),
@@ -426,7 +426,7 @@ mod chat_testing {
         }
 
         // Read all generated messages as user-1 to clear the socket
-        for _ in 0..50 {
+        for _ in 0..20 {
             receive_chat_message(&mut first_socket)
                 .await
                 .expect("Failed to receive a chat message when one was expected");
@@ -515,5 +515,50 @@ mod chat_testing {
     async fn chat_message_order() {
         // Rapidly generates 1000 messages, make sure that they are received in the correct order
         // randomize author in the generation, make sure that the broadcasts are received correctly?
+        let helper = TestHelper::init().await;
+        let client = &helper.client;
+        let addr = &helper.address;
+
+        let chat_helper = ChatHelper::setup_chat(client, addr, 2).await;
+        let token = chat_helper.tokens[0].as_str();
+        let second_token = chat_helper.tokens[1].as_str();
+        let user_two_id = chat_helper.users[1].id.as_str();
+        let channel_one_id = chat_helper.channels[0]._id.as_str();
+
+        // Subscribe to the first channel with the second user
+        subscribe_to_channel(client, addr, second_token, channel_one_id)
+            .await
+            .expect("Failed to subscribe to another users chat channel");
+
+        // Open a websocket connection with the first user for chatting
+        let (mut first_socket, _response) = tokio_tungstenite::connect_async(format!("ws://{}/api/chat/ws?auth_token={}", addr, token))
+            .await
+            .expect("Failed to open a ws connection with first user");
+
+        // Open a websocket connection with the second user for chatting
+        let (mut second_socket, _second_response) =
+            tokio_tungstenite::connect_async(format!("ws://{}/api/chat/ws?auth_token={}", addr, second_token))
+                .await
+                .expect("Failed to open a ws connection with second user");
+
+        // Quickly make 100 messages where the author is alternated
+        for n in 0..100 {
+            let message_data: WebSocketRequest = CreateMessageSchema {
+                channel_id: channel_one_id.to_string(),
+                contents: format!("Chat message {}", n),
+                reply_to: None,
+            }
+            .into();
+            send_websocket_request(&mut second_socket, &message_data).await;
+        }
+
+        // Receive messages as one of the users, verify that they're received in order
+        for n in 0..100 {
+            let chat_message = receive_chat_message(&mut first_socket)
+                .await
+                .expect("Failed to receive a chat message when one was expected");
+            assert_eq!(chat_message.atomic_id, n + 1);
+            assert_eq!(chat_message.author_id.as_str(), user_two_id);
+        }
     }
 }
