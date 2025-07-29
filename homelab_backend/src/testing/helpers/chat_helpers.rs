@@ -66,6 +66,15 @@ pub async fn receive_chat_message(socket: &mut WebSocketStream<MaybeTlsStream<Tc
     match guarded_receive_data_from_socket(socket).await {
         WebSocketResponse::SendChatMessage(chat_message) => Ok(chat_message),
         WebSocketResponse::SendError(ws_err) => Err(ws_err),
+        WebSocketResponse::MessageCreated(_message_created) => {
+            // When a user creates a message they are sent a MessageCreated, but it is not guaranteed which order
+            // the two responses will come in. Try to poll again
+            match guarded_receive_data_from_socket(socket).await {
+                WebSocketResponse::SendChatMessage(chat_message) => Ok(chat_message),
+                WebSocketResponse::SendError(ws_err) => Err(ws_err),
+                _ => panic!("Should only SendChatMessage or SendError when getting a chat message"),
+            }
+        }
         _ => panic!("Should only receive SendChatMessage or SendError when getting a chat message"),
     }
 }

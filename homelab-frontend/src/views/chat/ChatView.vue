@@ -1,7 +1,7 @@
 <script setup lang="ts">
   import type { Ref } from 'vue';
   import type { ChatChannel } from '@/models/chat_interfaces';
-  import type { WebSocketRequest } from '@/models/chat_interfaces';
+  import { WebsocketRequestType, type WebSocketRequest } from '@/models/chat_interfaces';
 
   import { nextTick, ref, useTemplateRef, watch } from 'vue';
   import { globalState } from '@/stores/store';
@@ -9,6 +9,7 @@
   import useToasterStore from '@/stores/useToasterStore';
   import ChatMessage from '@/components/chat/ChatMessage.vue';
   import MessageInput from '@/components/chat/MessageInput.vue';
+  import Timestamp from '@/components/shared/timestamp.vue';
 
   const toasterStore = useToasterStore();
 
@@ -48,7 +49,7 @@
       }
 
       const requestChatState: WebSocketRequest = {
-        "type": "GetChatState",
+        "type": WebsocketRequestType.GetChatState,
         "data": {message_count: 25, atomic_message_id: channelData.most_recent_message_id, channel_id: channelData._id}
       };
       globalState.websocketConnection?.send(JSON.stringify(requestChatState));
@@ -87,7 +88,7 @@
     if (globalState.websocketConnection !== null && globalState.websocketConnection.readyState === WebSocket.OPEN) {
       const channelData: ChatChannel = selectedChannel.value as ChatChannel;
       const sendMessagePacket: WebSocketRequest = {
-        "type": "CreateMessage",
+        "type": WebsocketRequestType.CreateMessage,
         "data": {channel_id: channelData._id, contents: message, reply_to: null }
       };
       globalState.websocketConnection.send(JSON.stringify(sendMessagePacket));
@@ -132,7 +133,10 @@
         <div ref="scrollable-area" class="messages-area">
           <div v-for="(message, index) in globalState.chatMessages.get(selectedChannel._id)" :key="index">
             <div v-if="index === 0 || (globalState.chatMessages.has(selectedChannel._id) && globalState.chatMessages.get(selectedChannel._id)[index - 1].author_id !== message.author_id)">
-              {{ selectedChannelUserMap.get(message.author_id) || message.author_id }}
+              <span>{{ selectedChannelUserMap.get(message.author_id) || message.author_id }}</span>
+              <span class="message-datetime">
+                <timestamp :timestamp="message.updated_at"/>
+              </span>
             </div>
             <chat-message
               :chatMessage="message"
@@ -154,7 +158,7 @@
 
   .channel-list {
     max-width: 15vw;
-    margin-right: 25px;
+    margin-right: 30px;
   }
 
   .channel-list > hr {
@@ -181,6 +185,10 @@
     flex-grow: 1;
     overflow: auto;
     flex-direction: column-reverse;
+  }
+
+  .message-datetime {
+    padding-left: 0.5vw;
   }
 
   .message-input {

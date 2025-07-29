@@ -1,4 +1,4 @@
-import type { CreateChatChannelData, ListChatChannelsParams, ChatChannelSubscribeData, ChatMessage, WebSocketError } from '@/models/chat_interfaces';
+import { type CreateChatChannelData, type ListChatChannelsParams, type ChatChannelSubscribeData, type ChatMessage, type WebSocketError, WebsocketResponseType, type WebsocketMessageCreated } from '@/models/chat_interfaces';
 
 import axios from 'axios';
 import { websocket_base_url } from '@/../config.json';
@@ -8,14 +8,14 @@ export async function connectChat(token: String) {
   const socket = new WebSocket(`${websocket_base_url}/chat/ws?auth_token=${token}`);
   socket.onmessage = (event) => {
     const websocketResponse = JSON.parse(event.data);
-    if (websocketResponse.type === 'SendChatMessage') {
+    if (websocketResponse.type === WebsocketResponseType.SendChatMessage) {
       const chatMessage: ChatMessage = websocketResponse.data;
       if (!globalState.chatMessages.has(chatMessage.channel_id)) {
         globalState.chatMessages.set(chatMessage.channel_id, []);
       }
       globalState.chatMessages.get(chatMessage.channel_id)?.push(chatMessage);
     }
-    else if (websocketResponse.type === 'SendChatState') {
+    else if (websocketResponse.type === WebsocketResponseType.SendChatState) {
       const chatMessages: Array<ChatMessage> = websocketResponse.data;
       chatMessages.forEach(message => {
         if (!globalState.chatMessages.has(message.channel_id)) {
@@ -24,7 +24,16 @@ export async function connectChat(token: String) {
         globalState.chatMessages.get(message.channel_id)?.push(message);
       });
     }
-    else if (websocketResponse.type === 'SendError') {
+    else if (websocketResponse.type === WebsocketResponseType.MessageCreated) {
+      // TODO: This can't yet actually accomplish what it should (giving the user feedback on message creation)
+      // because a message is rendered when the server sends it back, not immediately after it's sent from the client
+      // and prior to server confirmation.
+
+      // Also, messages are stored in a list and might need to be stored as a nested hashmap of Map<channel_id, Map<msg_atomic_id, message>>
+      // for this to work
+      const messageCreatedData: WebsocketMessageCreated = websocketResponse.data;
+    }
+    else if (websocketResponse.type === WebsocketResponseType.SendError) {
       const errorResponse: WebSocketError = websocketResponse.data;
       console.error(`DEBUG: Websocket error ${errorResponse.status_code}: ${errorResponse.msg}`)
       // TODO: Actual error handling

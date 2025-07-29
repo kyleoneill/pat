@@ -91,6 +91,10 @@ async fn execute_chat_message_transaction(
             }
             return Err(error);
         }
+        // TODO: Mongo docs here has `result?` which will go back to the start of the loop and try
+        // the transaction again, but the transaction has already succeeded. This will cause an
+        // error that the transaction has already ended, and will loop for forever. The `if let Err()`
+        // is already capturing errors, so this has to be an Ok
         return result;
     }
 }

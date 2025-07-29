@@ -47,8 +47,15 @@ impl From<RequestMessagesSchema> for WebSocketRequest {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MessageCreatedResponse {
+    pub atomic_message_id: i64,
+    pub chat_channel_id: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(tag = "type", content = "data")]
 pub enum WebSocketResponse {
+    MessageCreated(MessageCreatedResponse),
     SendChatMessage(ChatMessage),
     SendChatState(Vec<ChatMessage>),
     SendError(WebSocketError),

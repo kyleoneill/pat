@@ -541,7 +541,7 @@ mod chat_testing {
                 .await
                 .expect("Failed to open a ws connection with second user");
 
-        // Quickly make 100 messages where the author is alternated
+        // Quickly make 100 messages
         for n in 0..100 {
             let message_data: WebSocketRequest = CreateMessageSchema {
                 channel_id: channel_one_id.to_string(),
@@ -552,7 +552,7 @@ mod chat_testing {
             send_websocket_request(&mut second_socket, &message_data).await;
         }
 
-        // Receive messages as one of the users, verify that they're received in order
+        // Receive messages, verify that they're received in order
         for n in 0..100 {
             let chat_message = receive_chat_message(&mut first_socket)
                 .await

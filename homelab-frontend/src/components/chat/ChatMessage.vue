@@ -9,7 +9,9 @@
 </script>
 
 <template>
-  <div class="chat-message" :class="{'sent': sent, 'received': !sent}">
+  <div class="chat-message"
+    :class="{'sent': sent, 'received': !sent}"
+  >
     <div class="chat-contents">{{ chatMessage.contents }}</div>
   </div>
 </template>
@@ -20,5 +22,9 @@
     max-width: 75%;
     padding: 5px 15px;
     margin-bottom: 2px;
+  }
+
+  .chat-message:hover {
+    background-color: var(--vt-c-black-soft);
   }
 </style>

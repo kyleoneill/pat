@@ -5,7 +5,7 @@ use crate::models::chat::{
     chat_channel::{CreateChannelSchema, ReturnChannel},
     chat_channel_db::{get_chat_channel_by_id, hydrate_chat_channel_subscribers, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
     message_db::{get_chat_message_span, insert_chat_message},
-    packet::{WebSocketRequest, WebSocketResponse},
+    packet::{MessageCreatedResponse, WebSocketRequest, WebSocketResponse},
 };
 use crate::{logger, AppState};
 use axum::{
@@ -296,7 +296,11 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                                                     let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
                                                 }
                                             }
-                                            None
+                                            let response = MessageCreatedResponse {
+                                                atomic_message_id: chat_message.atomic_id,
+                                                chat_channel_id: chat_message.channel_id,
+                                            };
+                                            Some(WebSocketResponse::MessageCreated(response))
                                         }
                                         Err(_e) => Some(WebSocketResponse::ws_error(500, "Unhandled failure while creating a chat message")),
                                     }

@@ -65,14 +65,31 @@ interface RequestMessages {
   channel_id: String,
 }
 
+export enum WebsocketRequestType {
+  CreateMessage = "CreateMessage",
+  GetChatState = "GetChatState",
+}
+
 export interface WebSocketRequest {
-  type: String,
+  type: WebsocketRequestType,
   data: SendMessagePacket | RequestMessages,
 }
 
+export enum WebsocketResponseType {
+  SendChatMessage = "SendChatMessage",
+  SendChatState = "SendChatState",
+  MessageCreated = "MessageCreated",
+  SendError = "SendError",
+}
+
 export interface WebSocketResponse {
-  type: String,
-  data: ChatMessage | Array<ChatChannel> | WebSocketError,
+  type: WebsocketResponseType,
+  data: ChatMessage | Array<ChatChannel> | WebSocketError | WebsocketMessageCreated,
+}
+
+export interface WebsocketMessageCreated {
+  atomic_message_id: Number,
+  channel_id: String,
 }
 
 export interface WebSocketError {
