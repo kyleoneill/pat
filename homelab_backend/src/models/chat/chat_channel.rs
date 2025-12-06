@@ -4,13 +4,6 @@ use super::super::deserialize_id;
 use crate::models::user::ReturnUser;
 use serde::{Deserialize, Deserializer, Serialize};
 
-#[derive(Serialize, Deserialize)]
-pub struct CreateChannelSchema {
-    pub name: Option<String>,
-    pub channel_type: i64,
-    pub slug: String,
-}
-
 #[derive(Serialize, PartialEq, Clone, Debug)]
 pub enum ChannelType {
     DirectMessage,

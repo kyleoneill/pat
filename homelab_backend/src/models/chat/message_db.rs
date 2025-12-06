@@ -1,5 +1,6 @@
 use super::chat_channel_db::get_chat_channel_by_id;
-use super::message::{ChatMessage, CreateMessageSchema};
+use super::message::ChatMessage;
+use super::validation::CreateMessageSchema;
 use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use crate::models::chat::chat_channel::ChatChannel;

@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod games_testing {
-    use crate::models::games::{ConnectionCategorySchema, ConnectionGameSchema};
+    use crate::models::games::validation::{CreateConnectionCategorySchema, CreateConnectionGameSchema};
 
     use crate::testing::helpers::games_helpers::{create_connections_game, get_game_to_play, list_connections_games, try_connections_solution};
-    use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
+    use crate::testing::helpers::user_helpers::{create_user, get_user_me};
     use crate::testing::TestHelper;
     use hyper::StatusCode;
 
@@ -20,38 +20,34 @@ mod games_testing {
         let password_two = "second";
 
         // Create users
-        create_user(client, username, password, addr).await.unwrap();
-        create_user(client, username_two, password_two, addr).await.unwrap();
-
-        // Get tokens for the users
-        let token = auth_user(client, username, password, addr).await.unwrap();
-        let second_token = auth_user(client, username_two, password_two, addr).await.unwrap();
+        let token = create_user(client, username, password, addr).await.unwrap();
+        let second_token = create_user(client, username_two, password_two, addr).await.unwrap();
 
         // Get our user so we have their id
         let user = get_user_me(client, token.as_str(), addr).await.unwrap();
         let user_two = get_user_me(client, second_token.as_str(), addr).await.unwrap();
 
         let connection_categories = [
-            ConnectionCategorySchema {
+            CreateConnectionCategorySchema {
                 category_clues: ["foo".to_string(), "bar".to_string(), "baz".to_string(), "bash".to_string()],
                 category_name: "first".to_string(),
             },
-            ConnectionCategorySchema {
+            CreateConnectionCategorySchema {
                 category_clues: ["foo".to_string(), "bar".to_string(), "baz".to_string(), "bash".to_string()],
                 category_name: "second".to_string(),
             },
-            ConnectionCategorySchema {
+            CreateConnectionCategorySchema {
                 category_clues: ["foo".to_string(), "bar".to_string(), "baz".to_string(), "bash".to_string()],
                 category_name: "third".to_string(),
             },
-            ConnectionCategorySchema {
+            CreateConnectionCategorySchema {
                 category_clues: ["foo".to_string(), "bar".to_string(), "baz".to_string(), "bash".to_string()],
                 category_name: "fourth".to_string(),
             },
         ];
 
         // Create a connections game
-        let data = ConnectionGameSchema {
+        let data = CreateConnectionGameSchema {
             connection_categories: connection_categories.clone(),
             puzzle_name: "Test Puzzle".to_string(),
         };
@@ -72,7 +68,7 @@ mod games_testing {
         }
 
         // Create a second connections game
-        let second_data = ConnectionGameSchema {
+        let second_data = CreateConnectionGameSchema {
             connection_categories: connection_categories.clone(),
             puzzle_name: "Second Test Puzzle".to_string(),
         };
@@ -81,7 +77,7 @@ mod games_testing {
             .expect("Failed to create a connections game");
 
         // Create a connections game as a second user
-        let other_user_data = ConnectionGameSchema {
+        let other_user_data = CreateConnectionGameSchema {
             connection_categories: connection_categories.clone(),
             puzzle_name: "Other User Test Puzzle".to_string(),
         };

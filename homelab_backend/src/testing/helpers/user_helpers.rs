@@ -1,5 +1,5 @@
-use crate::models::user::ReturnUser;
-use crate::testing::helpers::{delete_request, get_request, post_request};
+use crate::models::user::{validation::UpdateUserSchema, ReturnUser};
+use crate::testing::helpers::{delete_request, get_request, post_request, put_request};
 use axum::body::Body;
 use axum::http::StatusCode;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -12,7 +12,7 @@ pub async fn create_user(
     username: &str,
     password: &str,
     addr: &SocketAddr,
-) -> Result<ReturnUser, (StatusCode, String)> {
+) -> Result<String, (StatusCode, String)> {
     let data = json!({"username": username, "password": password});
     post_request(client, "/users", data, None, addr).await
 }
@@ -25,6 +25,15 @@ pub async fn auth_user(
 ) -> Result<String, (StatusCode, String)> {
     let data = json!({"username": username, "password": password});
     post_request(client, "/users/auth", data, None, addr).await
+}
+
+pub async fn update_user(
+    client: &Client<HttpConnector, Body>,
+    token: &str,
+    addr: &SocketAddr,
+    update_data: UpdateUserSchema,
+) -> Result<ReturnUser, (StatusCode, String)> {
+    put_request(client, "/users/me", update_data, token, addr).await
 }
 
 pub async fn get_user_me(client: &Client<HttpConnector, Body>, token: &str, addr: &SocketAddr) -> Result<ReturnUser, (StatusCode, String)> {

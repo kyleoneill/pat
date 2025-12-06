@@ -1,4 +1,4 @@
-use crate::models::reminder::{Category, Priority, Reminder, ReminderUpdateSchema};
+use crate::models::reminder::{validation::UpdateReminderSchema, Category, Priority, Reminder};
 use crate::testing::helpers::{delete_request, get_request, post_request, put_request};
 use axum::body::Body;
 use axum::http::StatusCode;
@@ -67,7 +67,7 @@ pub async fn update_reminder_helper(
     addr: &SocketAddr,
     token: &str,
     reminder_id: String,
-    reminder_updates: ReminderUpdateSchema,
+    reminder_updates: UpdateReminderSchema,
 ) -> Result<Reminder, (StatusCode, String)> {
     let path = format!("/reminders/{reminder_id}");
     let data = json!(reminder_updates);

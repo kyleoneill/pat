@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod user_testing {
-    use crate::testing::helpers::user_helpers::{auth_user, create_user, delete_user_me, get_user_me};
+    use crate::models::user::validation::UpdateUserSchema;
+    use crate::testing::helpers::user_helpers::{auth_user, create_user, delete_user_me, get_user_me, update_user};
     use crate::testing::TestHelper;
     use axum::http::StatusCode;
 
@@ -14,12 +15,7 @@ mod user_testing {
         let password = "bar";
 
         // Create a new user
-        match create_user(client, username, password, addr).await {
-            Ok(new_user) => {
-                assert_eq!(new_user.username.as_str(), username)
-            }
-            Err(_) => panic!("Failed to create a new user"),
-        }
+        create_user(client, username, password, addr).await.expect("Failed to create a new user");
 
         // Try to create a user where the username is already taken
         match create_user(client, username, password, addr).await {
@@ -40,7 +36,65 @@ mod user_testing {
 
         // get user
         let user_me = get_user_me(client, token.as_str(), addr).await.unwrap();
-        assert_eq!(user_me.username.as_str(), "foo");
+        assert_eq!(user_me.username.as_str(), username);
+
+        // Update
+        {
+            let user_two_username = "user_two";
+            let new_username = "user_two_new";
+            let user_two_password = "user_two";
+            let new_password = "user_two_new";
+
+            // Create a second user to test username collision
+            let user_two_token = create_user(client, user_two_username, user_two_password, addr).await.unwrap();
+
+            // Try to update the username to one already in use
+            let bad_update_data = UpdateUserSchema {
+                username: Some(username.to_owned()),
+                password: None,
+            };
+            match update_user(client, user_two_token.as_str(), addr, bad_update_data).await {
+                Ok(_) => panic!("Updating a username to one already in use should fail"),
+                Err((status_code, _msg)) => assert_eq!(
+                    status_code,
+                    StatusCode::BAD_REQUEST,
+                    "Updating a username to one already in use should fail"
+                ),
+            }
+
+            // Update the username and password
+            let update_data = UpdateUserSchema {
+                username: Some(new_username.to_owned()),
+                password: Some(new_password.to_owned()),
+            };
+            let updated_user = update_user(client, user_two_token.as_str(), addr, update_data)
+                .await
+                .expect("Failed to update a users username and password");
+            assert_eq!(
+                updated_user.username.as_str(),
+                new_username,
+                "Failed to assert that the username has been changed after an update"
+            );
+
+            // TODO: https://github.com/kyleoneill/pat/issues/48
+            // // Try to make a request with user two's existing token, which should have been kicked
+            // match get_user_me(client, user_two_token.as_str(), addr).await {
+            //     Ok(_) => panic!("User token should have been kicked after their password was changed"),
+            //     Err((status_code, _msg)) => assert_eq!(
+            //         status_code,
+            //         StatusCode::UNAUTHORIZED,
+            //         "User token should have been kicked after their password was changed"
+            //     )
+            // }
+
+            // Auth with the new password, verify the token words
+            let new_token = auth_user(client, new_username, new_password, addr)
+                .await
+                .expect("Failed to auth with a new password");
+            get_user_me(client, new_token.as_str(), addr)
+                .await
+                .expect("Failed to use an auth token generated after password has been changed");
+        }
 
         // delete user
         match delete_user_me(client, token.as_str(), addr).await {

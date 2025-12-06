@@ -1,4 +1,5 @@
-use super::chat_channel::{ChatChannel, CreateChannelSchema, ReturnChannel};
+use super::chat_channel::{ChatChannel, ReturnChannel};
+use super::validation::CreateChannelSchema;
 use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use crate::logger::log_msg;
