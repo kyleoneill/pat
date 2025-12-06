@@ -10,17 +10,10 @@ use mongodb::{
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn insert_connections_game(
-    pool: &Database,
-    data: &ConnectionGameSchema,
-    user_id: String,
-) -> Result<ConnectionGame, DbError> {
+pub async fn insert_connections_game(pool: &Database, data: &ConnectionGameSchema, user_id: String) -> Result<ConnectionGame, DbError> {
     let collection: Collection<Document> = pool.collection("game_connections");
     let slug = name_to_slug(data.puzzle_name.as_str());
-    let date_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+    let date_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
     let doc = doc! {
         "connection_categories": [
@@ -38,9 +31,7 @@ pub async fn insert_connections_game(
         Ok(_res) => (),
         Err(e) => {
             return match *e.kind {
-                ErrorKind::Write(_) => {
-                    Err(DbError::AlreadyExists(ResourceKind::ConnectionsGame, slug))
-                }
+                ErrorKind::Write(_) => Err(DbError::AlreadyExists(ResourceKind::ConnectionsGame, slug)),
                 _ => Err(e.into()),
             }
         }
@@ -48,29 +39,19 @@ pub async fn insert_connections_game(
     get_connection_game_by_slug(pool, slug.as_str()).await
 }
 
-pub async fn get_connection_game_by_slug(
-    pool: &Database,
-    slug: &str,
-) -> Result<ConnectionGame, DbError> {
+pub async fn get_connection_game_by_slug(pool: &Database, slug: &str) -> Result<ConnectionGame, DbError> {
     let collection: Collection<ConnectionGame> = pool.collection("game_connections");
     let doc = doc! { "slug": slug };
     match collection.find_one(doc).await {
         Ok(maybe_record) => match maybe_record {
             Some(category) => Ok(category),
-            None => Err(DbError::NotFound(
-                ResourceKind::ConnectionsGame,
-                slug.to_owned(),
-            )),
+            None => Err(DbError::NotFound(ResourceKind::ConnectionsGame, slug.to_owned())),
         },
         Err(e) => Err(e.into()),
     }
 }
 
-pub async fn get_all_connections_games(
-    pool: &Database,
-    user_id: &str,
-    this_users_games: bool,
-) -> Result<Vec<ConnectionGame>, DbError> {
+pub async fn get_all_connections_games(pool: &Database, user_id: &str, this_users_games: bool) -> Result<Vec<ConnectionGame>, DbError> {
     // TODO: This should take a cursor and be paginated
     let collection: Collection<ConnectionGame> = pool.collection("game_connections");
     let doc = match this_users_games {

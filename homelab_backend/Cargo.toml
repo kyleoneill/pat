@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = {  version = "0.7.4", features = ["macros"] }
+axum = {  version = "0.7.4", features = ["macros", "ws"] }
 axum-extra = {  version = "0.9.4", features = ["query"] }
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.1"
@@ -24,6 +24,9 @@ hyper-util = { version = "0.1", features = ["client", "http1", "client-legacy"] 
 http-body-util = "0.1.0"
 tracing = "0.1"
 futures = "0.3.28"
+
+# Used for testing ws connections
+tokio-tungstenite = "*"
 
 [dependencies.mongodb]
 version = "3.1.0"

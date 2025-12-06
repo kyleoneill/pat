@@ -64,11 +64,13 @@
 
   --color-heading: var(--vt-c-text-dark-1);
   --color-text: var(--vt-c-text-dark-3);
+  --dark-color-text: var(--vt-c-text-dark-2);
 
   --section-gap: 160px;
 }
 
 :root {
+    --tiny-text-size: 12px;
     --small-text-size: 16px;
     --text-size: 18px;
     --img-text-size: 15px;

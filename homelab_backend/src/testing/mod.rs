@@ -1,11 +1,13 @@
 #![allow(dead_code)]
 
+mod chat_testing;
 mod games_testing;
 mod helpers;
 mod log_testing;
 mod reminder_testing;
 mod user_testing;
 
+use crate::models::chat::{chat_channel::ChatChannel, message::ChatMessage};
 use crate::models::games::ConnectionGame;
 use crate::models::log::Log;
 use crate::models::reminder::{Category, Reminder};
@@ -19,6 +21,9 @@ use mongodb::{Collection, Database};
 use serde::Serialize;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
+
+// This ID is almost guaranteed to never exist :)
+const FAKE_MONGO_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaa";
 
 pub struct TestHelper {
     pub client: Client<HttpConnector, Body>,
@@ -34,15 +39,13 @@ impl TestHelper {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let app = generate_app(database.clone()).await;
-        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        let client =
-            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-                .build_http();
-        let helper = Self {
-            client,
-            address,
-            database,
-        };
+        tokio::spawn(async move {
+            axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+                .await
+                .unwrap()
+        });
+        let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+        let helper = Self { client, address, database };
         helper.wipe_database().await;
         helper
     }
@@ -62,9 +65,14 @@ impl TestHelper {
         let reminders_collection: Collection<Reminder> = self.database.collection("reminders");
         let _res = reminders_collection.delete_many(doc! {}).await;
 
-        let games_collection: Collection<ConnectionGame> =
-            self.database.collection("game_connections");
+        let games_collection: Collection<ConnectionGame> = self.database.collection("game_connections");
         let _res = games_collection.delete_many(doc! {}).await;
+
+        let chat_channels_collection: Collection<ChatChannel> = self.database.collection("chat_channels");
+        let _res = chat_channels_collection.delete_many(doc! {}).await;
+
+        let chat_messages_collection: Collection<ChatMessage> = self.database.collection("chat_messages");
+        let _res = chat_messages_collection.delete_many(doc! {}).await;
     }
 }
 

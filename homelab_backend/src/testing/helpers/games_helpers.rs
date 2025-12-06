@@ -1,6 +1,4 @@
-use crate::models::games::{
-    ConnectionGame, ConnectionGameSchema, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow,
-};
+use crate::models::games::{ConnectionGame, ConnectionGameSchema, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow};
 use crate::testing::helpers::{get_request, post_request, put_request};
 use axum::body::Body;
 use axum::http::StatusCode;

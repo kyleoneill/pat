@@ -20,9 +20,7 @@ where
     if let Bson::Int64(value) = bson {
         Ok(AuthLevel::from(value))
     } else {
-        Err(serde::de::Error::custom(
-            "Expected an Int64 while deserializing AuthLevel",
-        ))
+        Err(serde::de::Error::custom("Expected an Int64 while deserializing AuthLevel"))
     }
 }
 
@@ -71,7 +69,7 @@ impl User {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ReturnUser {
     pub id: String,
     pub username: String,
