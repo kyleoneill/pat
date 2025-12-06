@@ -20,8 +20,7 @@ async fn get_user(pool: &Database, maybe_user_id: Result<String, String>) -> Res
             Ok(user) => Ok(user),
             Err(e) => match e {
                 DbError::NotFound(resource_kind, identifier) => Err(ServerError::FailedAuthentication(format!(
-                    "Could not find {} with identifier {}",
-                    resource_kind, identifier
+                    "Could not find {resource_kind} with identifier {identifier}"
                 ))),
                 _ => Err(ServerError::InternalFailure("Authenticating".to_owned())),
             },

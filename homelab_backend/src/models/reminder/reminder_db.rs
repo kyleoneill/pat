@@ -126,7 +126,7 @@ pub async fn get_reminder_by_id(pool: &Database, id: String) -> Result<Reminder,
             None => Err(DbError::NotFound(ResourceKind::Reminder, id.to_string())),
         },
         Err(e) => {
-            println!("{:?}", e);
+            println!("{e:?}");
             Err(e.into())
         }
     }

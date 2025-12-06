@@ -351,6 +351,7 @@ mod chat_testing {
         assert_eq!(updated_first_channel.most_recent_message_id, 2);
 
         // ----------------------------------
+        // Test unauthorized message use and garbage data
 
         // Try to send a message to a channel that does not exist
         let message_data_bad_channel: WebSocketRequest = CreateMessageSchema {

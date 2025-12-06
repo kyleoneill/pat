@@ -292,7 +292,7 @@ async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app
                                         Ok(chat_message) => {
                                             // Check to see if any subscribers of the destination channel have active connections
                                             for subscriber in channel.subscribers {
-                                                if let Some(tx) = (&cloned_state).active_connections.read().await.get(subscriber.as_str()) {
+                                                if let Some(tx) = cloned_state.active_connections.read().await.get(subscriber.as_str()) {
                                                     let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
                                                 }
                                             }

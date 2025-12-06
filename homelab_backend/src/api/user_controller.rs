@@ -23,7 +23,7 @@ pub fn hash_password(mut password: String, salt: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(password);
     let result = hasher.finalize();
-    format!("{:X}", result)
+    format!("{result:X}")
 }
 
 pub fn generate_salt() -> String {

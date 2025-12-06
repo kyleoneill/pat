@@ -58,7 +58,7 @@ async fn execute_chat_message_transaction(
         Ok(bson_id) => bson_id,
         Err(_) => return Err(MongoError::custom("Failed to parse ObjectId of a channel")),
     };
-    let filter_doc = doc! {"_id": Bson::ObjectId(channel_id.clone())};
+    let filter_doc = doc! {"_id": Bson::ObjectId(channel_id)};
     let channel = match channel_collection.find_one(filter_doc).session(&mut *session).await? {
         Some(channel) => channel,
         None => return Err(MongoError::custom("Failed to find a chat channel with the given ID")),

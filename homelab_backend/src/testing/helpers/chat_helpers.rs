@@ -48,7 +48,7 @@ pub async fn list_channels(
     token: &str,
     query_params: &str,
 ) -> Result<Vec<ReturnChannel>, (StatusCode, String)> {
-    let path = format!("/chat/channels{}", query_params);
+    let path = format!("/chat/channels{query_params}");
     get_request(client, path.as_str(), token, addr).await
 }
 
@@ -58,7 +58,7 @@ pub async fn get_channel_by_id(
     token: &str,
     channel_id: &str,
 ) -> Result<ReturnChannel, (StatusCode, String)> {
-    let path = format!("/chat/channels/{}", channel_id);
+    let path = format!("/chat/channels/{channel_id}");
     get_request(client, path.as_str(), token, addr).await
 }
 

@@ -22,6 +22,6 @@ impl Display for ResourceKind {
             ResourceKind::ChatChannel => "Chat Channel",
             ResourceKind::ChatMessage => "Chat Message",
         };
-        write!(f, "{}", thing)
+        write!(f, "{thing}")
     }
 }
