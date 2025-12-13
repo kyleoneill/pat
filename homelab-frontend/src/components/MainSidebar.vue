@@ -10,6 +10,9 @@ import { RouterLink } from 'vue-router'
         <li><RouterLink to="/reminders">Reminders</RouterLink></li>
         <li><RouterLink to="/games/connections">Connections</RouterLink></li>
         <li><RouterLink to="/chat">Chat</RouterLink></li>
+        <hr />
+        <li><RouterLink to="/my_account">My Account</RouterLink></li>
+        <hr />
         <li><a @click="$emit('logout')">Logout</a></li>
       </ul>
     </nav>
@@ -25,6 +28,11 @@ import { RouterLink } from 'vue-router'
   border-right-color: var(--vt-c-text-light-2);
   border-right-style: solid;
   border-right-width: thin;
+}
+
+.sidebar hr {
+  border-color: var(--vt-c-text-light-2);
+  margin-bottom: 0.25rem;
 }
 
 nav {

@@ -12,6 +12,11 @@ const router = createRouter({
       name: 'home',
       component: HomeView
     },
+    {
+      path: '/my_account',
+      name: 'my-account',
+      component: () => import('../views/account/AccountView.vue')
+    }, 
     ...remindersRoutes,
     ...gamesRoutes,
     ...chatRoutes,
