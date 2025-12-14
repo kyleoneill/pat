@@ -12,7 +12,8 @@ use axum::{
 
 use crate::models::games::{
     games_db::{get_all_connections_games, get_connection_game_by_slug, insert_connections_game},
-    ConnectionGame, ConnectionGameSchema, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow,
+    validation::CreateConnectionGameSchema,
+    ConnectionGame, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow,
 };
 
 pub fn games_routes() -> Router<Arc<AppState>> {
@@ -27,7 +28,7 @@ pub fn games_routes() -> Router<Arc<AppState>> {
 async fn create_connections(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Json(connection_data): Json<ConnectionGameSchema>,
+    Json(connection_data): Json<CreateConnectionGameSchema>,
 ) -> ReturnData<ConnectionGame> {
     let pool = &app_state.db;
     let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {

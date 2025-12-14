@@ -16,7 +16,8 @@ use crate::models::reminder::{
         db_delete_reminder, db_update_reminder, delete_category_by_id, get_categories_for_user, get_reminders_for_user, insert_category,
         insert_reminder,
     },
-    Category, CategorySchema, Reminder, ReminderSchema, ReminderUpdateSchema,
+    validation::{CreateCategorySchema, CreateReminderSchema, UpdateReminderSchema},
+    Category, Reminder,
 };
 
 pub fn reminder_routes() -> Router<Arc<AppState>> {
@@ -35,7 +36,7 @@ pub fn reminder_routes() -> Router<Arc<AppState>> {
 async fn create_category(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Json(category_data): Json<CategorySchema>,
+    Json(category_data): Json<CreateCategorySchema>,
 ) -> ReturnData<Category> {
     let pool = &app_state.db;
     let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
@@ -79,7 +80,7 @@ async fn delete_category(State(app_state): State<Arc<AppState>>, headers: Header
 async fn create_reminder(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
-    Json(reminder_data): Json<ReminderSchema>,
+    Json(reminder_data): Json<CreateReminderSchema>,
 ) -> ReturnData<Reminder> {
     let pool = &app_state.db;
     let user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {
@@ -121,7 +122,7 @@ async fn update_reminder(
     State(app_state): State<Arc<AppState>>,
     headers: HeaderMap,
     Path(reminder_id): Path<String>,
-    Json(update_data): Json<ReminderUpdateSchema>,
+    Json(update_data): Json<UpdateReminderSchema>,
 ) -> ReturnData<Reminder> {
     let pool = &app_state.db;
     let _user = match get_user_from_auth_header(pool, &headers, &app_state.config.app_secret).await {

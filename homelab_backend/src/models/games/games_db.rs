@@ -1,4 +1,4 @@
-use super::{ConnectionGame, ConnectionGameSchema};
+use super::{validation::CreateConnectionGameSchema, ConnectionGame};
 use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use crate::models::name_to_slug;
@@ -10,7 +10,7 @@ use mongodb::{
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn insert_connections_game(pool: &Database, data: &ConnectionGameSchema, user_id: String) -> Result<ConnectionGame, DbError> {
+pub async fn insert_connections_game(pool: &Database, data: &CreateConnectionGameSchema, user_id: String) -> Result<ConnectionGame, DbError> {
     let collection: Collection<Document> = pool.collection("game_connections");
     let slug = name_to_slug(data.puzzle_name.as_str());
     let date_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;

@@ -1,16 +1,16 @@
 #[cfg(test)]
 mod chat_testing {
     use crate::testing::{
-        helpers::user_helpers::{auth_user, create_user, get_user_me},
+        helpers::user_helpers::{create_user, get_user_me},
         TestHelper, FAKE_MONGO_ID,
     };
     use hyper::StatusCode;
     use std::net::SocketAddr;
 
     use crate::models::chat::{
-        chat_channel::{ChannelType, CreateChannelSchema, ReturnChannel},
-        message::CreateMessageSchema,
+        chat_channel::{ChannelType, ReturnChannel},
         packet::{RequestMessagesSchema, WebSocketRequest},
+        validation::{CreateChannelSchema, CreateMessageSchema},
     };
     use crate::models::user::ReturnUser;
     use crate::testing::helpers::chat_helpers::{
@@ -39,8 +39,8 @@ mod chat_testing {
                 // TODO: Client and addr are being passed all over the place, and here it's causing a needless import. Should
                 //       bundle this into an actual testing struct
                 // Create a user, get the user and a token for the user
-                let user = create_user(client, username.as_str(), password.as_str(), addr).await.unwrap();
-                let token = auth_user(client, username.as_str(), password.as_str(), addr).await.unwrap();
+                let token = create_user(client, username.as_str(), password.as_str(), addr).await.unwrap();
+                let user = get_user_me(client, token.as_str(), addr).await.unwrap();
 
                 // Create a channel for the user
                 let data = CreateChannelSchema {
@@ -73,12 +73,8 @@ mod chat_testing {
         let password_two = "second";
 
         // Create users
-        create_user(client, username, password, addr).await.unwrap();
-        create_user(client, username_two, password_two, addr).await.unwrap();
-
-        // Get tokens for the users
-        let token = auth_user(client, username, password, addr).await.unwrap();
-        let second_token = auth_user(client, username_two, password_two, addr).await.unwrap();
+        let token = create_user(client, username, password, addr).await.unwrap();
+        let second_token = create_user(client, username_two, password_two, addr).await.unwrap();
 
         // Get our user so we have their id
         let user = get_user_me(client, token.as_str(), addr).await.unwrap();

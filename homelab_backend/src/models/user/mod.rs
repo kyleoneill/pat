@@ -1,5 +1,6 @@
 pub mod jwt;
 pub mod user_db;
+pub mod validation;
 
 use mongodb::bson::Bson;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -82,10 +83,4 @@ impl From<User> for ReturnUser {
             username: value.username,
         }
     }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LoginUserSchema {
-    pub username: String,
-    pub password: String,
 }

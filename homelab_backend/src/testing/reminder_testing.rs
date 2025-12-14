@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod reminder_testing {
-    use crate::models::reminder::{Priority, ReminderUpdateSchema};
+    use crate::models::reminder::{validation::UpdateReminderSchema, Priority};
     use crate::testing::helpers::reminder_helpers::{
         create_category, create_reminder, delete_category_by_id, delete_reminder_helper, get_categories, list_reminders, update_reminder_helper,
     };
-    use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
+    use crate::testing::helpers::user_helpers::{create_user, get_user_me};
     use crate::testing::TestHelper;
     use hyper::StatusCode;
 
@@ -18,10 +18,7 @@ mod reminder_testing {
         let password = "foo";
 
         // Create a user
-        create_user(client, username, password, addr).await.unwrap();
-
-        // Get a token for the user
-        let token = auth_user(client, username, password, addr).await.unwrap();
+        let token = create_user(client, username, password, addr).await.unwrap();
 
         // Get our user so we have their id
         let user = get_user_me(client, token.as_str(), addr).await.unwrap();
@@ -111,7 +108,7 @@ mod reminder_testing {
         assert_eq!(list_filter_to_unused_category.len(), 0);
 
         // Try to update a reminder with no data, which should fail
-        let bad_update_data = ReminderUpdateSchema {
+        let bad_update_data = UpdateReminderSchema {
             name: None,
             description: None,
             categories: None,
@@ -127,7 +124,7 @@ mod reminder_testing {
         };
 
         // Update a reminder
-        let update_data = ReminderUpdateSchema {
+        let update_data = UpdateReminderSchema {
             name: None,
             description: Some("This is a new description".to_owned()),
             categories: None,
@@ -140,7 +137,7 @@ mod reminder_testing {
         assert_eq!(update_reminder_res.description.as_str(), "This is a new description");
 
         // Update a reminder while changing both the name and categories fields
-        let multiple_updates = ReminderUpdateSchema {
+        let multiple_updates = UpdateReminderSchema {
             name: Some("new name".to_owned()),
             description: None,
             categories: Some(vec![created_category.id.clone()]),
@@ -174,10 +171,7 @@ mod reminder_testing {
         let password = "foo";
 
         // Create a user
-        create_user(client, username, password, addr).await.unwrap();
-
-        // Get a token for the user
-        let token = auth_user(client, username, password, addr).await.unwrap();
+        let token = create_user(client, username, password, addr).await.unwrap();
 
         // Get our user so we have their id
         let user = get_user_me(client, token.as_str(), addr).await.unwrap();

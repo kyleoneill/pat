@@ -2,10 +2,11 @@ use super::{get_user_from_auth_header, get_user_from_token};
 use crate::api::return_data::ReturnData;
 use crate::error_handler::DbError;
 use crate::models::chat::{
-    chat_channel::{CreateChannelSchema, ReturnChannel},
+    chat_channel::ReturnChannel,
     chat_channel_db::{get_chat_channel_by_id, hydrate_chat_channel_subscribers, insert_chat_channel, list_chat_channels, update_chat_channel_by_id},
     message_db::{get_chat_message_span, insert_chat_message},
     packet::{MessageCreatedResponse, WebSocketRequest, WebSocketResponse},
+    validation::CreateChannelSchema,
 };
 use crate::{logger, AppState};
 use axum::{

@@ -1,4 +1,4 @@
-use crate::models::games::{ConnectionGame, ConnectionGameSchema, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow};
+use crate::models::games::{validation::CreateConnectionGameSchema, ConnectionGame, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow};
 use crate::testing::helpers::{get_request, post_request, put_request};
 use axum::body::Body;
 use axum::http::StatusCode;
@@ -11,7 +11,7 @@ pub async fn create_connections_game(
     client: &Client<HttpConnector, Body>,
     addr: &SocketAddr,
     token: &str,
-    connection_game: &ConnectionGameSchema,
+    connection_game: &CreateConnectionGameSchema,
 ) -> Result<ConnectionGame, (StatusCode, String)> {
     let data = json!(connection_game);
     post_request(client, "/games/connections", data, Some(token), addr).await

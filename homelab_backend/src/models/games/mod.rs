@@ -1,36 +1,10 @@
 pub mod games_db;
+pub mod validation;
 
-use mongodb::bson::{doc, Document};
 use rand::seq::SliceRandom;
 
 use super::deserialize_id;
 use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ConnectionGameSchema {
-    pub connection_categories: [ConnectionCategorySchema; 4],
-    pub puzzle_name: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ConnectionCategorySchema {
-    pub category_clues: [String; 4],
-    pub category_name: String,
-}
-
-impl ConnectionCategorySchema {
-    pub fn to_doc(&self) -> Document {
-        doc! {
-            "category_clues": [
-                self.category_clues[0].to_owned(),
-                self.category_clues[1].to_owned(),
-                self.category_clues[2].to_owned(),
-                self.category_clues[3].to_owned(),
-            ],
-            "category_name": self.category_name.to_string()
-        }
-    }
-}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConnectionGame {

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use super::message::{ChatMessage, CreateMessageSchema};
+use super::message::ChatMessage;
+use super::validation::CreateMessageSchema;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RequestMessagesSchema {

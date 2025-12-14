@@ -1,4 +1,7 @@
-use super::{Category, CategorySchema, Reminder, ReminderSchema, ReminderUpdateSchema};
+use super::{
+    validation::{CreateCategorySchema, CreateReminderSchema, UpdateReminderSchema},
+    Category, Reminder,
+};
 use crate::db::resource_kinds::ResourceKind;
 use crate::error_handler::DbError;
 use futures::{StreamExt, TryStreamExt};
@@ -12,7 +15,7 @@ use mongodb::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // Categories
-pub async fn insert_category(pool: &Database, data: &CategorySchema, user_id: String) -> Result<Category, DbError> {
+pub async fn insert_category(pool: &Database, data: &CreateCategorySchema, user_id: String) -> Result<Category, DbError> {
     let collection: Collection<Document> = pool.collection("categories");
     let doc = doc! {
         "slug": data.slug.clone(),
@@ -85,7 +88,7 @@ pub async fn delete_category_by_id(pool: &Database, category_id: String, user_id
 }
 
 // Reminders
-pub async fn insert_reminder(pool: &Database, data: &ReminderSchema, user_id: String) -> Result<Reminder, DbError> {
+pub async fn insert_reminder(pool: &Database, data: &CreateReminderSchema, user_id: String) -> Result<Reminder, DbError> {
     let serialized_priority = data.priority as i64;
     let date_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
@@ -150,25 +153,27 @@ pub async fn get_reminders_for_user(pool: &Database, user_id: String, maybe_cate
     }
 }
 
-pub async fn db_update_reminder(pool: &Database, reminder_id: String, updates: ReminderUpdateSchema) -> Result<Reminder, DbError> {
+pub async fn db_update_reminder(pool: &Database, reminder_id: String, updates: UpdateReminderSchema) -> Result<Reminder, DbError> {
     let reminder_collection: Collection<Reminder> = pool.collection("reminders");
     let mut doc = Document::new();
 
-    if let Some(name) = &updates.name {
-        doc.insert("name", name.to_owned());
+    // TODO: This is going to be very cumbersome for update schemas with many fields. I should
+    //       make a trait or macro where I can just do schema_to_doc!()
+    if let Some(name) = updates.name {
+        doc.insert("name", name);
     };
 
-    if let Some(description) = &updates.description {
-        doc.insert("description", description.to_owned());
+    if let Some(description) = updates.description {
+        doc.insert("description", description);
     };
 
-    if let Some(priority) = &updates.priority {
-        let serialized_priority: i64 = priority.to_owned().into();
+    if let Some(priority) = updates.priority {
+        let serialized_priority: i64 = priority.into();
         doc.insert("priority", serialized_priority);
     };
 
-    if let Some(categories) = &updates.categories {
-        doc.insert("categories", categories.to_owned());
+    if let Some(categories) = updates.categories {
+        doc.insert("categories", categories);
     };
 
     let bson_id: ObjectId = match reminder_id.parse() {

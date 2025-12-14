@@ -48,6 +48,8 @@
         }
       }
 
+      // TODO: Should update this packet to take a -1 or some other impossible ID as the message id to just get the
+      //       most recent message, in case the channels most recent id field is out of date
       const requestChatState: WebSocketRequest = {
         "type": WebsocketRequestType.GetChatState,
         "data": {message_count: 25, atomic_message_id: channelData.most_recent_message_id, channel_id: channelData._id}

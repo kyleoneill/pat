@@ -1,6 +1,9 @@
-use crate::models::chat::chat_channel::{CreateChannelSchema, ReturnChannel};
-use crate::models::chat::message::ChatMessage;
-use crate::models::chat::packet::{WebSocketError, WebSocketRequest, WebSocketResponse};
+use crate::models::chat::{
+    chat_channel::ReturnChannel,
+    message::ChatMessage,
+    packet::{WebSocketError, WebSocketRequest, WebSocketResponse},
+    validation::CreateChannelSchema,
+};
 use crate::testing::helpers::{get_request, post_request, put_request};
 use axum::body::Body;
 use axum::http::StatusCode;

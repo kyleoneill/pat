@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import { getAllReminderCategories, createReminder } from '@/api/reminders_api'
-import type { Ref } from 'vue'
-import { ref } from 'vue'
+import { getAllReminderCategories, createReminder } from '@/api/reminders_api';
+import type { Ref } from 'vue';
+import { ref } from 'vue';
 
-import type { ReminderCategory } from '@/models/reminder_interfaces'
+import type { ReminderCategory } from '@/models/reminder_interfaces';
 
-import { Priority } from '@/models/reminder_interfaces'
+import { Priority } from '@/models/reminder_interfaces';
 
-import useToasterStore from '@/stores/useToasterStore'
+import useToasterStore from '@/stores/useToasterStore';
 const toasterStore = useToasterStore();
 
-const loading = ref(true)
-const categories: Ref<ReminderCategory[]> = ref([])
+const loading = ref(true);
+const categories: Ref<ReminderCategory[]> = ref([]);
 
-const name = ref('')
-const description = ref('')
-const reminderCategories = ref([])
-const priority = ref(Priority.Medium)
+const name = ref('');
+const description = ref('');
+const reminderCategories = ref([]);
+const priority = ref(Priority.Medium);
 
 function createNewReminder() {
   if (name.value === '' || description.value === '') {
@@ -26,27 +26,27 @@ function createNewReminder() {
   loading.value = true
   createReminder(name.value, description.value, reminderCategories.value, priority.value).then(response => {
     toasterStore.success({text: `Created new reminder with name ${name.value}`});
-    name.value = ''
-    description.value = ''
-    reminderCategories.value = []
-    priority.value = Priority.Medium
+    name.value = '';
+    description.value = '';
+    reminderCategories.value = [];
+    priority.value = Priority.Medium;
   }).catch(error => {
     toasterStore.responseError({error: error});
   }).finally(() => {
-    loading.value = false
+    loading.value = false;
   })
 }
 
 function fetch_reminder_categories() {
   getAllReminderCategories().then(response => {
-    categories.value = response.data
+    categories.value = response.data;
   }).catch(error => {
     toasterStore.responseError({error: error});
   })
 }
 
-fetch_reminder_categories()
-loading.value = false
+fetch_reminder_categories();
+loading.value = false;
 </script>
 
 <template>

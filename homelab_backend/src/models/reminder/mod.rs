@@ -1,4 +1,5 @@
 pub mod reminder_db;
+pub mod validation;
 
 use super::deserialize_id;
 use mongodb::bson::Bson;
@@ -48,12 +49,6 @@ impl From<Priority> for i64 {
     }
 }
 
-#[derive(Deserialize)]
-pub struct CategorySchema {
-    slug: String,
-    name: String,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Category {
     #[serde(rename = "_id", deserialize_with = "deserialize_id")]
@@ -61,22 +56,6 @@ pub struct Category {
     pub slug: String,
     pub name: String,
     pub user_id: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ReminderSchema {
-    name: String,
-    description: String,
-    categories: Vec<String>,
-    priority: Priority,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ReminderUpdateSchema {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub categories: Option<Vec<String>>,
-    pub priority: Option<Priority>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
