@@ -20,6 +20,7 @@ const toastStore = useToasterStore();
         <img class="toaster-inner-icon" v-if="toast.status == 'error'" src="../assets/icons/error.svg" alt="error-icon" />
         <img class="toaster-inner-icon" v-if="toast.status == 'warning'" src="../assets/icons/warning.svg" alt="warning-icon" />
         <span class="toaster-inner-text">{{ toast.text }}</span>
+        <img class="toaster-inner-icon" @click="toastStore.deleteToast(toast.id)" src="../assets/icons/close.svg" alt="close-icon" />
       </li>
     </ul>
   </Teleport>
@@ -44,16 +45,16 @@ const toastStore = useToasterStore();
   align-items: center;
   gap: 1rem;
 
-  border-radius: 0.3rem;
+  border-radius: 0.5rem;
 
   border: 1px solid transparent;
 
   background-color: white;
 
-  padding: 2.2rem 1.6rem;
+  padding: 1rem 1.2rem;
 
   border-color: var(--color);
-  color: var(--color);
+  color: black;
 }
 
 .toaster-inner img {
@@ -63,14 +64,17 @@ const toastStore = useToasterStore();
 
 .success {
   --color: green;
+  background-color: #EFFFED;
 }
 
 .warning {
   --color: orange;
+  background-color: #FFF4DE;
 }
 
 .error {
   --color: red;
+  background-color: #FAE8E3;
 }
 
 .toaster-inner-icon {
@@ -79,7 +83,7 @@ const toastStore = useToasterStore();
 }
 
 .toaster-inner-text {
-  font-size: 1.6rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 450;
 }
 </style>

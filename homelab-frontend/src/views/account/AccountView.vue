@@ -25,12 +25,7 @@
         globalState.setCurrentUser(updateUserResponse.data);
         toasterStore.success({text: "Successfully updated account"})
       }).catch(error => {
-        if (error.status === 400) {
-          toasterStore.error({text: error.response.data.msg});
-        }
-        else {
-          toasterStore.error({text: "Failed to update account"});
-        }
+        toasterStore.responseError({error: error});
       }).finally(() => {
         loading.value = false;
         newUsername.value = '';
