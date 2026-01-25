@@ -2,6 +2,7 @@ pub mod reminder_db;
 pub mod validation;
 
 use super::deserialize_id;
+use crate::db::MongoModel;
 use mongodb::bson::Bson;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -58,6 +59,15 @@ pub struct Category {
     pub user_id: String,
 }
 
+impl MongoModel for Category {
+    fn collection_name() -> &'static str {
+        "categories"
+    }
+    fn model_name() -> &'static str {
+        "Reminder Category"
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Reminder {
     #[serde(rename = "_id", deserialize_with = "deserialize_id")]
@@ -69,4 +79,13 @@ pub struct Reminder {
     pub priority: Priority,
     pub user_id: String,
     pub date_time: i64,
+}
+
+impl MongoModel for Reminder {
+    fn collection_name() -> &'static str {
+        "reminders"
+    }
+    fn model_name() -> &'static str {
+        "Reminder"
+    }
 }

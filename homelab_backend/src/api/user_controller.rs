@@ -1,12 +1,3 @@
-use super::get_user_from_auth_header;
-use super::return_data::ReturnData;
-use crate::models::user::jwt::encode_jwt;
-use crate::models::user::user_db::{db_create_user, db_delete_user, db_get_user_by_id, db_get_user_by_username, db_update_user};
-use crate::models::user::{
-    validation::{LoginUserSchema, UpdateUserSchema},
-    AuthLevel, ReturnUser,
-};
-use crate::AppState;
 use std::sync::Arc;
 
 use axum::{
@@ -17,6 +8,17 @@ use axum::{
 };
 use rand::{distr::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
+
+use crate::{
+    api::{get_user_from_auth_header, return_data::ReturnData},
+    models::user::{
+        jwt::encode_jwt,
+        user_db::{db_create_user, db_delete_user, db_get_user_by_id, db_get_user_by_username, db_update_user},
+        validation::{LoginUserSchema, UpdateUserSchema},
+        AuthLevel, ReturnUser,
+    },
+    AppState,
+};
 
 const SALT_LENGTH: usize = 12;
 

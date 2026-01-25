@@ -2,10 +2,10 @@ pub mod jwt;
 pub mod user_db;
 pub mod validation;
 
+use super::deserialize_id;
+use crate::db::MongoModel;
 use mongodb::bson::Bson;
 use serde::{Deserialize, Deserializer, Serialize};
-
-use super::deserialize_id;
 
 #[derive(Serialize, PartialEq, Debug)]
 pub enum AuthLevel {
@@ -62,6 +62,15 @@ pub struct User {
     #[serde(deserialize_with = "deserialize")]
     pub auth_level: AuthLevel,
     pub salt: String,
+}
+
+impl MongoModel for User {
+    fn collection_name() -> &'static str {
+        "users"
+    }
+    fn model_name() -> &'static str {
+        "User"
+    }
 }
 
 impl User {

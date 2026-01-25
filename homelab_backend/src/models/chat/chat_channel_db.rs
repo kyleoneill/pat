@@ -1,22 +1,26 @@
-use super::chat_channel::{ChatChannel, ReturnChannel};
-use super::validation::CreateChannelSchema;
-use crate::db::resource_kinds::ResourceKind;
-use crate::error_handler::DbError;
-use crate::logger::log_msg;
-use crate::models::user::user_db::db_get_user_by_id;
-use crate::models::user::ReturnUser;
 use futures::TryStreamExt;
-use mongodb::bson::oid::ObjectId;
-use mongodb::error::ErrorKind;
 use mongodb::{
-    bson::Bson,
-    bson::{doc, Document},
-    Collection, Database,
+    bson::{doc, Bson, Document},
+    error::ErrorKind,
+    Collection,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub async fn insert_chat_channel(pool: &Database, data: &CreateChannelSchema, user_id: String) -> Result<ChatChannel, DbError> {
-    let collection: Collection<Document> = pool.collection("chat_channels");
+use crate::{
+    db::{str_to_object_id, MongoModel, PatDatabase},
+    error_handler::DbError,
+    logger::log_msg,
+    models::{
+        chat::{
+            chat_channel::{ChatChannel, ReturnChannel},
+            validation::CreateChannelSchema,
+        },
+        user::{user_db::db_get_user_by_id, ReturnUser},
+    },
+};
+
+pub async fn insert_chat_channel(db_handle: &PatDatabase, data: &CreateChannelSchema, user_id: String) -> Result<ChatChannel, DbError> {
+    let collection: Collection<Document> = db_handle.get_type_agnostic_collection(ChatChannel::collection_name());
     let date_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
     let doc = doc! {
         "slug": data.slug.clone(),
@@ -34,57 +38,45 @@ pub async fn insert_chat_channel(pool: &Database, data: &CreateChannelSchema, us
         Ok(_res) => (),
         Err(e) => {
             return match *e.kind {
-                ErrorKind::Write(_) => Err(DbError::AlreadyExists(ResourceKind::ChatChannel, data.slug.clone())),
+                ErrorKind::Write(_) => Err(DbError::AlreadyExists(ChatChannel::model_name(), data.slug.clone())),
                 _ => Err(e.into()),
             }
         }
     }
-    get_chat_channel_by_slug_and_user_id(pool, data.slug.as_str(), user_id.as_str()).await
+    get_chat_channel_by_slug_and_user_id(db_handle, data.slug.as_str(), user_id.as_str()).await
 }
 
-pub async fn get_chat_channel_by_slug_and_user_id(pool: &Database, slug: &str, user_id: &str) -> Result<ChatChannel, DbError> {
-    let collection: Collection<ChatChannel> = pool.collection("chat_channels");
+pub async fn get_chat_channel_by_slug_and_user_id(db_handle: &PatDatabase, slug: &str, user_id: &str) -> Result<ChatChannel, DbError> {
     let doc = doc! { "slug": slug, "owner_id": user_id };
-    match collection.find_one(doc).await {
-        Ok(maybe_record) => match maybe_record {
-            Some(chat_channel) => Ok(chat_channel),
-            None => Err(DbError::NotFound(ResourceKind::ChatChannel, slug.to_owned())),
-        },
-        Err(e) => Err(e.into()),
-    }
+    db_handle.find_one(doc).await
 }
 
-pub async fn get_chat_channel_by_id(pool: &Database, id: &str) -> Result<ChatChannel, DbError> {
-    let collection: Collection<ChatChannel> = pool.collection("chat_channels");
-    let channel_id: ObjectId = match id.parse() {
-        Ok(bson_id) => bson_id,
-        Err(_) => return Err(DbError::BadId),
-    };
+pub async fn get_chat_channel_by_id(db_handle: &PatDatabase, id: &str) -> Result<ChatChannel, DbError> {
+    let channel_id = str_to_object_id(id)?;
     let filter_doc = doc! {"_id": Bson::ObjectId(channel_id)};
-    match collection.find_one(filter_doc).await {
-        Ok(maybe_record) => match maybe_record {
-            Some(chat_channel) => Ok(chat_channel),
-            None => Err(DbError::NotFound(ResourceKind::ChatChannel, id.to_owned())),
-        },
-        Err(e) => Err(e.into()),
-    }
+    db_handle.find_one(filter_doc).await
 }
 
-pub async fn update_chat_channel_by_id(pool: &Database, id: &str, filter_doc: Document, update_doc: Document) -> Result<ChatChannel, DbError> {
-    let collection: Collection<ChatChannel> = pool.collection("chat_channels");
+pub async fn update_chat_channel_by_id(
+    db_handle: &PatDatabase,
+    id: &str,
+    filter_doc: Document,
+    update_doc: Document,
+) -> Result<ChatChannel, DbError> {
+    let collection: Collection<ChatChannel> = db_handle.get_collection();
     match collection.update_one(filter_doc, update_doc).await {
         Ok(update_res) => {
             if update_res.matched_count == 0 {
-                return Err(DbError::NotFound(ResourceKind::ChatChannel, id.to_owned()));
+                return Err(DbError::NotFound(ChatChannel::model_name()));
             }
         }
         Err(e) => return Err(e.into()),
     }
-    get_chat_channel_by_id(pool, id).await
+    get_chat_channel_by_id(db_handle, id).await
 }
 
-pub async fn list_chat_channels(pool: &Database, filter_doc: Document) -> Result<Vec<ChatChannel>, DbError> {
-    let collection: Collection<ChatChannel> = pool.collection("chat_channels");
+pub async fn list_chat_channels(db_handle: &PatDatabase, filter_doc: Document) -> Result<Vec<ChatChannel>, DbError> {
+    let collection: Collection<ChatChannel> = db_handle.get_collection();
     match collection.find(filter_doc).await {
         Ok(cursor) => match cursor.try_collect().await {
             Ok(res) => Ok(res),
@@ -96,10 +88,10 @@ pub async fn list_chat_channels(pool: &Database, filter_doc: Document) -> Result
 
 // Might want to re-name this function as it converts one type to another and might change
 // more fields in the future than just subscribers (like the owner)
-pub async fn hydrate_chat_channel_subscribers(pool: &Database, chat_channel: ChatChannel) -> ReturnChannel {
+pub async fn hydrate_chat_channel_subscribers(db_handle: &PatDatabase, chat_channel: ChatChannel) -> ReturnChannel {
     let mut users: Vec<ReturnUser> = Vec::new();
     for user_id in &chat_channel.subscribers {
-        match db_get_user_by_id(pool, user_id.as_str()).await {
+        match db_get_user_by_id(db_handle, user_id.as_str()).await {
             Ok(user) => users.push(user.into()),
             Err(_e) => log_msg("Failed to get a user while hydrating chat channel subscribers"),
         }

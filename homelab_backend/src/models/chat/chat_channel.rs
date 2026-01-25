@@ -1,6 +1,7 @@
 use mongodb::bson::{doc, Bson};
 
 use super::super::deserialize_id;
+use crate::db::MongoModel;
 use crate::models::user::ReturnUser;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -80,6 +81,15 @@ pub struct ChatChannel {
     pub owner_id: String,
     pub created_at: i64,
     pub most_recent_message_id: i64,
+}
+
+impl MongoModel for ChatChannel {
+    fn collection_name() -> &'static str {
+        "chat_channels"
+    }
+    fn model_name() -> &'static str {
+        "Chat Channel"
+    }
 }
 
 #[derive(Serialize, Deserialize)]

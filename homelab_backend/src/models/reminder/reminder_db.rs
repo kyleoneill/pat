@@ -1,22 +1,23 @@
-use super::{
-    validation::{CreateCategorySchema, CreateReminderSchema, UpdateReminderSchema},
-    Category, Reminder,
-};
-use crate::db::resource_kinds::ResourceKind;
-use crate::error_handler::DbError;
 use futures::{StreamExt, TryStreamExt};
-use mongodb::bson::oid::ObjectId;
-use mongodb::bson::Bson;
-use mongodb::error::ErrorKind;
 use mongodb::{
-    bson::{doc, Document},
-    Collection, Database,
+    bson::{doc, oid::ObjectId, Bson, Document},
+    error::ErrorKind,
+    Collection,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::{
+    db::{str_to_object_id, MongoModel, PatDatabase},
+    error_handler::DbError,
+    models::reminder::{
+        validation::{CreateCategorySchema, CreateReminderSchema, UpdateReminderSchema},
+        Category, Reminder,
+    },
+};
+
 // Categories
-pub async fn insert_category(pool: &Database, data: &CreateCategorySchema, user_id: String) -> Result<Category, DbError> {
-    let collection: Collection<Document> = pool.collection("categories");
+pub async fn insert_category(db_handle: &PatDatabase, data: &CreateCategorySchema, user_id: String) -> Result<Category, DbError> {
+    let collection: Collection<Document> = db_handle.get_type_agnostic_collection(Category::collection_name());
     let doc = doc! {
         "slug": data.slug.clone(),
         "name": data.name.clone(),
@@ -26,16 +27,16 @@ pub async fn insert_category(pool: &Database, data: &CreateCategorySchema, user_
         Ok(_res) => (),
         Err(e) => {
             return match *e.kind {
-                ErrorKind::Write(_) => Err(DbError::AlreadyExists(ResourceKind::ReminderCategory, data.slug.clone())),
+                ErrorKind::Write(_) => Err(DbError::AlreadyExists(Category::model_name(), data.slug.clone())),
                 _ => Err(e.into()),
             }
         }
     }
-    get_category_by_slug(pool, &data.slug).await
+    get_category_by_slug(db_handle, &data.slug).await
 }
 
-pub async fn get_categories_for_user(pool: &Database, user_id: String) -> Result<Vec<Category>, DbError> {
-    let collection: Collection<Category> = pool.collection("categories");
+pub async fn get_categories_for_user(db_handle: &PatDatabase, user_id: String) -> Result<Vec<Category>, DbError> {
+    let collection: Collection<Category> = db_handle.get_collection();
     let doc = doc! { "user_id": user_id };
     match collection.find(doc).await {
         Ok(cursor) => match cursor.try_collect().await {
@@ -46,21 +47,14 @@ pub async fn get_categories_for_user(pool: &Database, user_id: String) -> Result
     }
 }
 
-pub async fn get_category_by_slug(pool: &Database, slug: &str) -> Result<Category, DbError> {
-    let collection: Collection<Category> = pool.collection("categories");
+pub async fn get_category_by_slug(db_handle: &PatDatabase, slug: &str) -> Result<Category, DbError> {
     let doc = doc! { "slug": slug };
-    match collection.find_one(doc).await {
-        Ok(maybe_record) => match maybe_record {
-            Some(category) => Ok(category),
-            None => Err(DbError::NotFound(ResourceKind::ReminderCategory, slug.to_owned())),
-        },
-        Err(e) => Err(e.into()),
-    }
+    db_handle.find_one(doc).await
 }
 
-pub async fn delete_category_by_id(pool: &Database, category_id: String, user_id: String) -> Result<u64, DbError> {
+pub async fn delete_category_by_id(db_handle: &PatDatabase, category_id: String, user_id: String) -> Result<u64, DbError> {
     // Verify that the category being deleted is not in use by a reminder
-    let reminder_collection: Collection<Reminder> = pool.collection("reminders");
+    let reminder_collection: Collection<Reminder> = db_handle.get_collection();
     let doc = doc! { "categories": category_id.clone() };
 
     // Could also use .count() here and check if the result is greater than 1, but getting a cursor
@@ -68,13 +62,13 @@ pub async fn delete_category_by_id(pool: &Database, category_id: String, user_id
     match reminder_collection.find(doc).await {
         Ok(mut cursor) => {
             if cursor.next().await.is_some() {
-                return Err(DbError::RelationshipViolation(ResourceKind::ReminderCategory, category_id.clone()));
+                return Err(DbError::RelationshipViolation(Category::model_name(), category_id.clone()));
             }
         }
         Err(e) => return Err(e.into()),
     }
 
-    let category_collection: Collection<Category> = pool.collection("categories");
+    let category_collection: Collection<Category> = db_handle.get_collection();
 
     let bson_id: ObjectId = match category_id.parse() {
         Ok(bson_id) => bson_id,
@@ -88,13 +82,13 @@ pub async fn delete_category_by_id(pool: &Database, category_id: String, user_id
 }
 
 // Reminders
-pub async fn insert_reminder(pool: &Database, data: &CreateReminderSchema, user_id: String) -> Result<Reminder, DbError> {
+pub async fn insert_reminder(db_handle: &PatDatabase, data: &CreateReminderSchema, user_id: String) -> Result<Reminder, DbError> {
     let serialized_priority = data.priority as i64;
     let date_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
     // TODO: Verify that all category IDs exist
 
-    let reminder_collection: Collection<Document> = pool.collection("reminders");
+    let reminder_collection: Collection<Document> = db_handle.get_type_agnostic_collection(Reminder::collection_name());
     let doc = doc! {
         "name": data.name.clone(),
         "description": data.description.clone(),
@@ -112,31 +106,21 @@ pub async fn insert_reminder(pool: &Database, data: &CreateReminderSchema, user_
         Err(e) => return Err(e.into()),
     };
 
-    get_reminder_by_id(pool, new_doc_id).await
+    get_reminder_by_id(db_handle, new_doc_id.as_str()).await
 }
 
-pub async fn get_reminder_by_id(pool: &Database, id: String) -> Result<Reminder, DbError> {
-    let reminder_collection: Collection<Reminder> = pool.collection("reminders");
-    let bson_id: ObjectId = match id.parse() {
-        Ok(bson_id) => bson_id,
-        Err(_) => return Err(DbError::BadId),
-    };
+pub async fn get_reminder_by_id(db_handle: &PatDatabase, id: &str) -> Result<Reminder, DbError> {
+    let bson_id: ObjectId = str_to_object_id(id)?;
     let doc = doc! { "_id": Bson::ObjectId(bson_id) };
-
-    match reminder_collection.find_one(doc).await {
-        Ok(maybe_doc) => match maybe_doc {
-            Some(doc) => Ok(doc),
-            None => Err(DbError::NotFound(ResourceKind::Reminder, id.to_string())),
-        },
-        Err(e) => {
-            println!("{e:?}");
-            Err(e.into())
-        }
-    }
+    db_handle.find_one(doc).await
 }
 
-pub async fn get_reminders_for_user(pool: &Database, user_id: String, maybe_categories: Option<Vec<String>>) -> Result<Vec<Reminder>, DbError> {
-    let reminder_collection: Collection<Reminder> = pool.collection("reminders");
+pub async fn get_reminders_for_user(
+    db_handle: &PatDatabase,
+    user_id: String,
+    maybe_categories: Option<Vec<String>>,
+) -> Result<Vec<Reminder>, DbError> {
+    let reminder_collection: Collection<Reminder> = db_handle.get_collection();
     let mut doc = doc! {"user_id": user_id};
 
     if maybe_categories.is_some() {
@@ -153,8 +137,8 @@ pub async fn get_reminders_for_user(pool: &Database, user_id: String, maybe_cate
     }
 }
 
-pub async fn db_update_reminder(pool: &Database, reminder_id: String, updates: UpdateReminderSchema) -> Result<Reminder, DbError> {
-    let reminder_collection: Collection<Reminder> = pool.collection("reminders");
+pub async fn db_update_reminder(db_handle: &PatDatabase, reminder_id: String, updates: UpdateReminderSchema) -> Result<Reminder, DbError> {
+    let reminder_collection: Collection<Reminder> = db_handle.get_collection();
     let mut doc = Document::new();
 
     // TODO: This is going to be very cumbersome for update schemas with many fields. I should
@@ -183,7 +167,7 @@ pub async fn db_update_reminder(pool: &Database, reminder_id: String, updates: U
     let filter_doc = doc! { "_id": Bson::ObjectId(bson_id) };
 
     if doc.is_empty() {
-        return Err(DbError::EmptyDbExpression(ResourceKind::Reminder, "updating".to_owned()));
+        return Err(DbError::EmptyDbExpression(Reminder::model_name(), "updating".to_owned()));
     }
 
     let update_doc = doc! { "$set": doc};
@@ -192,11 +176,11 @@ pub async fn db_update_reminder(pool: &Database, reminder_id: String, updates: U
         Err(e) => return Err(e.into()),
     };
 
-    get_reminder_by_id(pool, reminder_id).await
+    get_reminder_by_id(db_handle, reminder_id.as_str()).await
 }
 
-pub async fn db_delete_reminder(pool: &Database, reminder_id: String, user_id: String) -> Result<u64, DbError> {
-    let reminder_collection: Collection<Reminder> = pool.collection("reminders");
+pub async fn db_delete_reminder(db_handle: &PatDatabase, reminder_id: String, user_id: String) -> Result<u64, DbError> {
+    let reminder_collection: Collection<Reminder> = db_handle.get_collection();
     let reminder_bson_id: ObjectId = match reminder_id.parse() {
         Ok(bson_id) => bson_id,
         Err(_) => return Err(DbError::BadId),

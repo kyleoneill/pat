@@ -1,4 +1,5 @@
 use super::super::deserialize_id;
+use crate::db::MongoModel;
 use mongodb::bson::{doc, Bson};
 use serde::{Deserialize, Serialize};
 
@@ -48,4 +49,13 @@ pub struct ChatMessage {
     pub reactions: Vec<Reactions>,
     pub pinned: bool,
     pub atomic_id: i64,
+}
+
+impl MongoModel for ChatMessage {
+    fn collection_name() -> &'static str {
+        "chat_messages"
+    }
+    fn model_name() -> &'static str {
+        "Chat Message"
+    }
 }

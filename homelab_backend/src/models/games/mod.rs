@@ -2,9 +2,9 @@ pub mod games_db;
 pub mod validation;
 
 use rand::seq::SliceRandom;
-
-use super::deserialize_id;
 use serde::{Deserialize, Serialize};
+
+use crate::{db::MongoModel, models::deserialize_id};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConnectionGame {
@@ -15,6 +15,15 @@ pub struct ConnectionGame {
     pub slug: String,
     pub author_id: String,
     pub creation_datetime: i64,
+}
+
+impl MongoModel for ConnectionGame {
+    fn collection_name() -> &'static str {
+        "game_connections"
+    }
+    fn model_name() -> &'static str {
+        "Connections Game"
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -40,14 +40,15 @@ use tower_http::{
 
 use tracing::Span;
 
-use crate::models::chat::packet::WebSocketResponse;
 use mongodb::Database;
+
+use crate::{db::PatDatabase, models::chat::packet::WebSocketResponse};
 use tower_http::trace::DefaultMakeSpan;
 
 const LOGGABLE_METHODS: [Method; 4] = [Method::GET, Method::PUT, Method::POST, Method::DELETE];
 
 pub struct AppState {
-    pub db: Database,
+    pub db: PatDatabase,
     pub config: Config,
     // RwLock is potentially bad to use here in the scenario where there are many connects and
     // disconnects are being made, maybe 400k users for a 4GHz processor. App state will lock every
@@ -179,7 +180,7 @@ pub async fn generate_app(database: Database) -> Router {
 
     // Create app state and the router
     let state = Arc::new(AppState {
-        db: database,
+        db: PatDatabase::new(database),
         config,
         active_connections: RwLock::new(HashMap::new()),
     });
@@ -199,7 +200,7 @@ async fn main() {
 
     // Set up database pool
     let connection_string = dotenv!("CONNECTION_STRING").to_owned();
-    let database = db::initialize_database_handle(connection_string, "home_server_db").await;
+    let database = db::db_setup::initialize_database_handle(connection_string, "home_server_db").await;
 
     // run our app with hyper, listening on 127.0.0.1:3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();

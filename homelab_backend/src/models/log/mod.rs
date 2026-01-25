@@ -1,6 +1,7 @@
 pub mod log_db;
 
 use super::deserialize_id;
+use crate::db::MongoModel;
 use hyper::body::Bytes;
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,15 @@ pub struct Log {
     pub uri: String,
     pub user_id: String,
     date_time: i64,
+}
+
+impl MongoModel for Log {
+    fn collection_name() -> &'static str {
+        "logs"
+    }
+    fn model_name() -> &'static str {
+        "Log"
+    }
 }
 
 // TODO: Should have a log retention policy/task which auto deletes old tasks.

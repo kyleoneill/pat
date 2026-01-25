@@ -1,3 +1,4 @@
+use crate::{db::MongoModel, models::log::Log};
 use mongodb::bson::{doc, Document};
 use mongodb::{Collection, Database};
 use std::fmt::{Display, Formatter};
@@ -25,7 +26,7 @@ impl LogCreationTask {
         }
     }
     pub async fn run_task(&self, database: &Database) {
-        let collection: Collection<Document> = database.collection("logs");
+        let collection: Collection<Document> = database.collection(Log::collection_name());
         let mut uri = self.uri.clone();
         if uri.starts_with("/api/chat/ws?auth_token=") {
             // This is a bit hacky and should be made to support a general-purpose solution to the problem
