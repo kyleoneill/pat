@@ -1,8 +1,9 @@
 pub mod log_db;
 
 use super::deserialize_id;
-use crate::db::MongoModel;
+use crate::{db::MongoModel, error_handler::DbError};
 use hyper::body::Bytes;
+use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -21,6 +22,12 @@ impl MongoModel for Log {
     }
     fn model_name() -> &'static str {
         "Log"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
     }
 }
 

@@ -68,11 +68,7 @@ async fn delete_category(State(app_state): State<Arc<AppState>>, headers: Header
         Err(e) => return e.into(),
     };
     match delete_category_by_id(pool, category_id, user.get_id()).await {
-        Ok(res) => match res {
-            0 => ReturnData::not_found("Could not find a category with the given id for the current user".to_owned()),
-            1 => ReturnData::ok(()),
-            _ => ReturnData::internal_error("Unhandled exception while deleting data".to_owned()),
-        },
+        Ok(_) => ReturnData::ok(()),
         Err(e) => e.into(),
     }
 }
@@ -142,11 +138,7 @@ async fn delete_reminder(State(app_state): State<Arc<AppState>>, headers: Header
         Err(e) => return e.into(),
     };
     match db_delete_reminder(pool, reminder_id, user.get_id()).await {
-        Ok(res) => match res {
-            0 => ReturnData::not_found("Could not find a reminder with the given id for the current user".to_owned()),
-            1 => ReturnData::ok(()),
-            _ => ReturnData::internal_error("Unhandled exception while deleting data".to_owned()),
-        },
+        Ok(_) => ReturnData::ok(()),
         Err(db_err) => db_err.into(),
     }
 }

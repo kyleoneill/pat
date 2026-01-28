@@ -26,6 +26,8 @@ impl LogCreationTask {
         }
     }
     pub async fn run_task(&self, database: &Database) {
+        // TODO: This should have a PatDatabase instead of a Database and use
+        //       PatDatabase::insert_one
         let collection: Collection<Document> = database.collection(Log::collection_name());
         let mut uri = self.uri.clone();
         if uri.starts_with("/api/chat/ws?auth_token=") {

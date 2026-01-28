@@ -1,8 +1,6 @@
-use mongodb::bson::{doc, Bson};
-
 use super::super::deserialize_id;
-use crate::db::MongoModel;
-use crate::models::user::ReturnUser;
+use crate::{db::MongoModel, error_handler::DbError, models::user::ReturnUser};
+use mongodb::bson::{doc, oid::ObjectId, Bson};
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, PartialEq, Clone, Debug)]
@@ -89,6 +87,12 @@ impl MongoModel for ChatChannel {
     }
     fn model_name() -> &'static str {
         "Chat Channel"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
     }
 }
 
