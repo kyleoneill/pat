@@ -150,14 +150,6 @@ mod chat_testing {
         assert_eq!(get_channel._id.as_str(), first_channel._id.as_str());
 
         // Subscribe to a channel
-
-        /*
-        WHAT IS HAPPENING HERE?
-         The update IS successful and then the proceeding `find_one` with the same filter doc
-         as the update fails the match, due to the update, and causes a 404. How do I fix this
-         other than inserting a THIRD query here as a pre-update query?
-        */
-
         let subscribed_channel = subscribe_to_channel(client, addr, token.as_str(), third_channel._id.as_str())
             .await
             .expect("Failed to subscribe to another users chat channel");
