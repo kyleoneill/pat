@@ -92,7 +92,7 @@ async fn channel_subscribe(
         "$push": {"subscribers": user_id.as_str()}
     };
 
-    match update_chat_channel_by_id(pool, channel_data.channel_id.as_str(), filter_doc, update_doc).await {
+    match update_chat_channel_by_id(pool, filter_doc, update_doc).await {
         Ok(chat_channel) => ReturnData::ok(hydrate_chat_channel_subscribers(pool, chat_channel).await),
         Err(db_err) => db_err.into(),
     }
@@ -126,7 +126,7 @@ async fn channel_unsubscribe(
         "$pull": {"subscribers": user_id.as_str()}
     };
 
-    match update_chat_channel_by_id(pool, channel_data.channel_id.as_str(), filter_doc, update_doc).await {
+    match update_chat_channel_by_id(pool, filter_doc, update_doc).await {
         Ok(chat_channel) => ReturnData::ok(hydrate_chat_channel_subscribers(pool, chat_channel).await),
         Err(db_err) => db_err.into(),
     }

@@ -1,14 +1,13 @@
-use mongodb::error::ErrorKind;
+use mongodb::error::{ErrorKind, WriteFailure};
 
 use crate::api::return_data::ReturnData;
-use crate::db::resource_kinds::ResourceKind;
 
 #[derive(Debug)]
 pub enum DbError {
-    AlreadyExists(ResourceKind, String),
-    NotFound(ResourceKind, String),
-    RelationshipViolation(ResourceKind, String),
-    EmptyDbExpression(ResourceKind, String),
+    AlreadyExists,
+    NotFound(&'static str),
+    RelationshipViolation(&'static str, String),
+    EmptyDbExpression(&'static str, String),
     BadId,
     AuthFailure,
     UnhandledException(String),
@@ -21,6 +20,16 @@ impl From<mongodb::error::Error> for DbError {
         match *value.kind {
             ErrorKind::InvalidArgument { .. } => DbError::UnhandledException("Invalid argument to database".to_owned()),
             ErrorKind::Authentication { .. } => DbError::AuthFailure,
+            ErrorKind::Write(write_failure) => match write_failure {
+                WriteFailure::WriteConcernError(_write_concern_error) => DbError::UnhandledException("Unhandled error while writing data".to_owned()),
+                WriteFailure::WriteError(write_error) => match write_error.code {
+                    // TODO: write_error.message and write_error.details may have useful info to return
+                    //       to the user here, check them?
+                    11000 => DbError::AlreadyExists, // DuplicateKey error
+                    _ => DbError::UnhandledException("Unhandled error while writing data".to_owned()),
+                },
+                _ => DbError::UnhandledException("Unhandled error while writing data".to_owned()),
+            },
             _ => DbError::UnhandledException("Unhandled failure".to_owned()),
         }
     }
@@ -29,10 +38,8 @@ impl From<mongodb::error::Error> for DbError {
 impl<T> From<DbError> for ReturnData<T> {
     fn from(value: DbError) -> Self {
         match value {
-            DbError::AlreadyExists(resource_type, identifier) => {
-                ReturnData::bad_request(format!("A {resource_type} with identifier {identifier} already exists"))
-            }
-            DbError::NotFound(resource_type, identifier) => ReturnData::not_found(format!("{resource_type} with identifier {identifier} not found")),
+            DbError::AlreadyExists => ReturnData::bad_request("Tried to create a resource which violated a unique constraint".to_string()),
+            DbError::NotFound(resource_type) => ReturnData::not_found(format!("{resource_type} not found")),
             DbError::RelationshipViolation(resource_type, identifier) => ReturnData::bad_request(format!(
                 "The request violates a relationship constraint on {resource_type} with identifier {identifier}"
             )),

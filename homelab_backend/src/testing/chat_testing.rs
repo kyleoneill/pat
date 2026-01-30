@@ -153,6 +153,7 @@ mod chat_testing {
         let subscribed_channel = subscribe_to_channel(client, addr, token.as_str(), third_channel._id.as_str())
             .await
             .expect("Failed to subscribe to another users chat channel");
+        println!("{:?}", subscribed_channel.subscribers);
         assert!(subscribed_channel.subscribers.contains(&user.clone().into()));
 
         // Try to subscribe to a channel the user is already subscribed to

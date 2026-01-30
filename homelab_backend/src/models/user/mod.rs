@@ -3,9 +3,9 @@ pub mod user_db;
 pub mod validation;
 
 use mongodb::bson::Bson;
-use serde::{Deserialize, Deserializer, Serialize};
 
 use super::deserialize_id;
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, PartialEq, Debug)]
 pub enum AuthLevel {

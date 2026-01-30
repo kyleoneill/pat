@@ -7,17 +7,21 @@ mod log_testing;
 mod reminder_testing;
 mod user_testing;
 
-use crate::models::chat::{chat_channel::ChatChannel, message::ChatMessage};
-use crate::models::games::ConnectionGame;
-use crate::models::log::Log;
-use crate::models::reminder::{Category, Reminder};
-use crate::models::user::User;
-use crate::{db, generate_app};
+use crate::{
+    db::{db_setup, MongoModel},
+    generate_app,
+    models::{
+        chat::{chat_channel::ChatChannel, message::ChatMessage},
+        games::ConnectionGame,
+        log::Log,
+        reminder::{Category, Reminder},
+        user::User,
+    },
+};
 use axum::body::Body;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
-use mongodb::bson::doc;
-use mongodb::{Collection, Database};
+use mongodb::{bson::doc, Collection, Database};
 use serde::Serialize;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -34,7 +38,7 @@ pub struct TestHelper {
 impl TestHelper {
     pub async fn init() -> Self {
         let connection_string = dotenv!("CONNECTION_STRING").to_owned();
-        let database = db::initialize_database_handle(connection_string, "test_db").await;
+        let database = db_setup::initialize_database_handle(connection_string, "test_db").await;
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -53,25 +57,25 @@ impl TestHelper {
     pub async fn wipe_database(&self) {
         // TODO: This is not sustainable, what if 100 collections are added?
 
-        let user_collection: Collection<User> = self.database.collection("users");
+        let user_collection: Collection<User> = self.database.collection(User::collection_name());
         let _res = user_collection.delete_many(doc! {}).await;
 
-        let log_collection: Collection<Log> = self.database.collection("logs");
+        let log_collection: Collection<Log> = self.database.collection(Log::collection_name());
         let _res = log_collection.delete_many(doc! {}).await;
 
-        let categories_collection: Collection<Category> = self.database.collection("categories");
+        let categories_collection: Collection<Category> = self.database.collection(Category::collection_name());
         let _res = categories_collection.delete_many(doc! {}).await;
 
-        let reminders_collection: Collection<Reminder> = self.database.collection("reminders");
+        let reminders_collection: Collection<Reminder> = self.database.collection(Reminder::collection_name());
         let _res = reminders_collection.delete_many(doc! {}).await;
 
-        let games_collection: Collection<ConnectionGame> = self.database.collection("game_connections");
+        let games_collection: Collection<ConnectionGame> = self.database.collection(ConnectionGame::collection_name());
         let _res = games_collection.delete_many(doc! {}).await;
 
-        let chat_channels_collection: Collection<ChatChannel> = self.database.collection("chat_channels");
+        let chat_channels_collection: Collection<ChatChannel> = self.database.collection(ChatChannel::collection_name());
         let _res = chat_channels_collection.delete_many(doc! {}).await;
 
-        let chat_messages_collection: Collection<ChatMessage> = self.database.collection("chat_messages");
+        let chat_messages_collection: Collection<ChatMessage> = self.database.collection(ChatMessage::collection_name());
         let _res = chat_messages_collection.delete_many(doc! {}).await;
     }
 }

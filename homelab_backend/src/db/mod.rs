@@ -1,201 +1,165 @@
-pub mod resource_kinds;
+use crate::error_handler::DbError;
+use futures::TryStreamExt;
+use mongodb::{
+    bson::{doc, oid::ObjectId, Bson, Document},
+    error::Error,
+    options::FindOneAndUpdateOptions,
+    Collection, Database,
+};
+use serde::de::DeserializeOwned;
 
-use crate::models::chat::chat_channel::ChatChannel;
-use crate::models::chat::message::ChatMessage;
-use crate::models::games::ConnectionGame;
-use crate::models::reminder::Category;
-use crate::models::user::user_db::db_create_user;
-use crate::models::user::{AuthLevel, User};
-use mongodb::error::ErrorKind;
-use mongodb::options::IndexOptions;
-use mongodb::{bson::doc, Client, Collection, Database, IndexModel};
+pub mod db_setup;
 
-pub async fn initialize_database_handle(connection_string: String, database_name: &str) -> Database {
-    let client = Client::with_uri_str(connection_string).await.expect("Failed to connect to database");
-    let database = client.database(database_name);
+pub fn str_to_object_id(object_str: &str) -> Result<ObjectId, Error> {
+    match ObjectId::parse_str(object_str) {
+        Ok(object_id) => Ok(object_id),
+        Err(_) => Err(Error::custom("Failed to construct ObjectId")),
+    }
+}
 
-    check_indexes(&database).await;
+pub trait MongoModel {
+    fn collection_name() -> &'static str;
+    fn model_name() -> &'static str;
+    fn mongo_id(&self) -> Result<ObjectId, DbError>;
+}
 
-    // Check for admin, create if not here
-    let user_collection: Collection<User> = database.collection("users");
-    let user_filter = doc! {"username": "admin"};
-    let maybe_admin = user_collection
-        .find_one(user_filter)
-        .await
-        .expect("DB error during initialization when checking if the admin account exists");
-    if maybe_admin.is_none() {
-        let admin_password: String = dotenv!("ADMIN_PASSWORD_HASH").to_owned();
-        let salt: String = dotenv!("ADMIN_SALT").to_owned();
-        db_create_user(&database, "admin".to_owned(), admin_password, AuthLevel::Admin, salt)
+pub struct PatDatabase {
+    pool: Database,
+}
+
+impl PatDatabase {
+    pub fn new(database: Database) -> Self {
+        Self { pool: database }
+    }
+
+    pub fn pool_ref(&self) -> &Database {
+        &self.pool
+    }
+
+    pub fn get_type_agnostic_collection(&self, collection_name: &str) -> Collection<Document> {
+        // Inserting documents uses a Collection<Document> rather than a Collection<T> since it
+        // uses an insert schema rather than a T, as a T includes an _id field which does not
+        // exist until after the data has been inserted. Is there a way to resolve this without
+        // using a Collection<Document>?
+        self.pool.collection(collection_name)
+    }
+
+    pub fn get_collection<T>(&self) -> Collection<T>
+    where
+        T: MongoModel + Send + Sync,
+    {
+        self.pool.collection(T::collection_name())
+    }
+
+    pub async fn find_one<T>(&self, filter_doc: Document) -> Result<T, DbError>
+    where
+        T: MongoModel + Send + Sync + DeserializeOwned,
+    {
+        let collection: Collection<T> = self.pool.collection(T::collection_name());
+        match collection.find_one(filter_doc).await {
+            Ok(maybe_record) => match maybe_record {
+                Some(record) => Ok(record),
+                None => Err(DbError::NotFound(T::model_name())),
+            },
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub async fn find<T>(&self, filter_doc: Document) -> Result<Vec<T>, DbError>
+    where
+        T: MongoModel + Send + Sync + DeserializeOwned,
+    {
+        // TODO: Should support a sort here, then replace the collection.find() call being made
+        //       in message_db.rs
+        let collection: Collection<T> = self.pool.collection(T::collection_name());
+        match collection.find(filter_doc).await {
+            Ok(cursor) => match cursor.try_collect().await {
+                Ok(records) => Ok(records),
+                Err(e) => Err(e.into()),
+            },
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub async fn insert_one<T>(&self, collection_name: &str, insertion_data: Document) -> Result<ObjectId, DbError>
+    where
+        T: MongoModel + Send + Sync + DeserializeOwned,
+    {
+        let collection: Collection<Document> = self.pool.collection(collection_name);
+        match collection.insert_one(insertion_data).await {
+            Ok(res) => match res.inserted_id {
+                Bson::ObjectId(id) => Ok(id),
+                _ => Err(DbError::UnhandledException("Insertion failed to produce an ID".to_owned())),
+            },
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub async fn insert_and_retrieve_one<T>(&self, collection_name: &str, insertion_data: Document) -> Result<T, DbError>
+    where
+        T: MongoModel + Send + Sync + DeserializeOwned,
+    {
+        let object_id = self.insert_one::<T>(collection_name, insertion_data).await?;
+        let doc = doc! {"_id": object_id};
+        self.find_one(doc).await
+    }
+
+    #[allow(dead_code)]
+    pub async fn update_one<T>(&self, filter_doc: Document, update_doc: Document) -> Result<u64, DbError>
+    where
+        T: MongoModel + Send + Sync + DeserializeOwned,
+    {
+        let collection: Collection<T> = self.pool.collection(T::collection_name());
+        match collection.update_one(filter_doc, update_doc).await {
+            Ok(update_res) => {
+                if update_res.matched_count == 0 {
+                    return Err(DbError::NotFound(T::model_name()));
+                }
+                Ok(update_res.modified_count)
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub async fn find_and_update_one<T>(&self, filter_doc: Document, update_doc: Document) -> Result<T, DbError>
+    where
+        T: MongoModel + Send + Sync + DeserializeOwned,
+    {
+        let collection: Collection<T> = self.pool.collection(T::collection_name());
+
+        // find_one_and_update acts like an atomic operation and by default "swaps" the new and old
+        // documents, meaning that the default behavior is to return the document _before_ it's
+        // updated. This isn't what's desired for this helper, so use an option to get
+        // the document _after_ the update
+        let update_options = FindOneAndUpdateOptions::builder()
+            .return_document(Some(mongodb::options::ReturnDocument::After))
+            .build();
+        match collection
+            .find_one_and_update(filter_doc, update_doc)
+            .with_options(Some(update_options))
             .await
-            .expect("DB error during initialization when creating an admin account");
-    }
-    database
-}
-
-pub async fn check_indexes(database: &Database) {
-    // TODO: This is also not too sustainable, is there a better way to create indexes?
-    check_user_indexes(database).await;
-    check_category_indexes(database).await;
-    check_connections_game_indexes(database).await;
-    check_chat_channel_indexes(database).await;
-    check_chat_message_indexes(database).await;
-}
-
-pub async fn check_user_indexes(database: &Database) {
-    let user_collection: Collection<User> = database.collection("users");
-
-    match user_collection.list_index_names().await {
-        Ok(user_indexes) => {
-            if !user_indexes.contains(&"username".to_owned()) {
-                create_user_indexes(user_collection).await;
-            }
-        }
-        Err(e) => match *e.kind {
-            ErrorKind::Command(command_error) => match command_error.code {
-                26 => create_user_indexes(user_collection).await,
-                _ => panic!("Failed to list indexes for user collection with unknown error during db initialization"),
+        {
+            Ok(update_res) => match update_res {
+                Some(res) => Ok(res),
+                None => Err(DbError::NotFound(T::model_name())),
             },
-            _ => panic!("Failed to list indexes for user collection with unknown error during db initialization"),
-        },
-    }
-}
-
-pub async fn create_user_indexes(user_collection: Collection<User>) {
-    // Create an index for the username field, which should be unique
-    let user_index_options = IndexOptions::builder().unique(true).name(Some("username".to_owned())).build();
-    let username_index = IndexModel::builder().keys(doc! {"username": 1}).options(user_index_options).build();
-    user_collection
-        .create_index(username_index)
-        .await
-        .expect("Failed to create a username index on the users collection");
-}
-
-pub async fn check_category_indexes(database: &Database) {
-    let category_collection: Collection<Category> = database.collection("categories");
-
-    match category_collection.list_index_names().await {
-        Ok(user_indexes) => {
-            if !user_indexes.contains(&"slug".to_owned()) {
-                create_category_indexes(category_collection).await;
-            }
+            Err(e) => Err(e.into()),
         }
-        Err(e) => match *e.kind {
-            ErrorKind::Command(command_error) => match command_error.code {
-                26 => create_category_indexes(category_collection).await,
-                _ => panic!("Failed to list indexes for category collection with unknown error during db initialization"),
-            },
-            _ => panic!("Failed to list indexes for category collection with unknown error during db initialization"),
-        },
     }
-}
 
-pub async fn create_category_indexes(category_collection: Collection<Category>) {
-    // Create an index for the slug field, which should be unique
-    let category_index_options = IndexOptions::builder().unique(true).name(Some("slug".to_owned())).build();
-    let category_index = IndexModel::builder().keys(doc! {"slug": 1}).options(category_index_options).build();
-    category_collection
-        .create_index(category_index)
-        .await
-        .expect("Failed to create a slug index on the categories collection");
-}
-
-pub async fn check_connections_game_indexes(database: &Database) {
-    let game_connections_collection: Collection<ConnectionGame> = database.collection("game_connections");
-
-    match game_connections_collection.list_index_names().await {
-        Ok(indexes) => {
-            if !indexes.contains(&"slug".to_owned()) {
-                create_connections_game_indexes(game_connections_collection).await;
+    pub async fn delete_one<T>(&self, filter_doc: Document) -> Result<(), DbError>
+    where
+        T: MongoModel + Send + Sync + DeserializeOwned,
+    {
+        let collection: Collection<T> = self.pool.collection(T::collection_name());
+        match collection.delete_one(filter_doc).await {
+            Ok(delete_res) => {
+                if delete_res.deleted_count == 0 {
+                    return Err(DbError::NotFound(T::model_name()));
+                }
+                Ok(())
             }
+            Err(e) => Err(e.into()),
         }
-        Err(e) => match *e.kind {
-            ErrorKind::Command(command_error) => match command_error.code {
-                26 => create_connections_game_indexes(game_connections_collection).await,
-                _ => panic!("Failed to list indexes for game_connections collection with unknown error during db initialization"),
-            },
-            _ => panic!("Failed to list indexes for game_connections collection with unknown error during db initialization"),
-        },
     }
-}
-
-pub async fn create_connections_game_indexes(game_connections_collection: Collection<ConnectionGame>) {
-    // Create an index for the slug field, which should be unique
-    // TODO: Currently user A making a puzzle with slug "foo" prevents user B from making a puzzle
-    //       with the same name. This should probably be a user_id/slug composite index.
-    //       Will need to delete the index I have locally when I change this
-    let category_index_options = IndexOptions::builder().unique(true).name(Some("slug".to_owned())).build();
-    let category_index = IndexModel::builder().keys(doc! {"slug": 1}).options(category_index_options).build();
-    game_connections_collection
-        .create_index(category_index)
-        .await
-        .expect("Failed to create a slug index on the game_connections collection");
-}
-
-pub async fn check_chat_channel_indexes(database: &Database) {
-    let chat_channels_collection: Collection<ChatChannel> = database.collection("chat_channels");
-
-    match chat_channels_collection.list_index_names().await {
-        Ok(indexes) => {
-            if !indexes.contains(&"slug_and_owner_id".to_owned()) {
-                create_chat_channels_indexes(chat_channels_collection).await;
-            }
-        }
-        Err(e) => match *e.kind {
-            ErrorKind::Command(command_error) => match command_error.code {
-                26 => create_chat_channels_indexes(chat_channels_collection).await,
-                _ => panic!("Failed to list indexes for chat_channels collection with unknown error during db initialization"),
-            },
-            _ => panic!("Failed to list indexes for chat_channels collection with unknown error during db initialization"),
-        },
-    }
-}
-
-pub async fn create_chat_channels_indexes(chat_channels_collection: Collection<ChatChannel>) {
-    // Create a composite index for the slug and owner_id fields, which should be unique
-    let category_index_options = IndexOptions::builder().unique(true).name(Some("slug_and_owner_id".to_owned())).build();
-    let category_index = IndexModel::builder()
-        .keys(doc! {"slug": 1, "owner_id": 1})
-        .options(category_index_options)
-        .build();
-    chat_channels_collection
-        .create_index(category_index)
-        .await
-        .expect("Failed to create a slug_and_owner_id index on the chat_channels collection");
-}
-
-pub async fn check_chat_message_indexes(database: &Database) {
-    let chat_messages_collection: Collection<ChatMessage> = database.collection("chat_messages");
-
-    match chat_messages_collection.list_index_names().await {
-        Ok(indexes) => {
-            if !indexes.contains(&"channel_and_atomic_ids".to_owned()) {
-                create_chat_message_indexes(chat_messages_collection).await;
-            }
-        }
-        Err(e) => match *e.kind {
-            ErrorKind::Command(command_error) => match command_error.code {
-                26 => create_chat_message_indexes(chat_messages_collection).await,
-                _ => panic!("Failed to list indexes for chat_messages collection with unknown error during db initialization"),
-            },
-            _ => panic!("Failed to list indexes for chat_messages collection with unknown error during db initialization"),
-        },
-    }
-}
-
-pub async fn create_chat_message_indexes(collection: Collection<ChatMessage>) {
-    let category_index_options = IndexOptions::builder()
-        .unique(true)
-        .name(Some("channel_and_atomic_ids".to_owned()))
-        .build();
-    // atomic_id ordered by -1 which makes it descending. This will put the largest number (the most
-    // recent message) first
-    let category_index = IndexModel::builder()
-        .keys(doc! {"channel_id": 1, "atomic_id": -1})
-        .options(category_index_options)
-        .build();
-    collection
-        .create_index(category_index)
-        .await
-        .expect("Failed to create a channel_and_atomic_ids index on the chat_messages collection");
 }

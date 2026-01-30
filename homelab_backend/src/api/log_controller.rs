@@ -1,8 +1,3 @@
-use super::get_user_from_auth_header;
-use super::return_data::ReturnData;
-use crate::models::log::log_db::{db_get_log_by_id, db_get_logs_for_user};
-use crate::models::log::Log;
-use crate::AppState;
 use axum::{
     extract::{Path, State},
     http::header::HeaderMap,
@@ -10,6 +5,15 @@ use axum::{
     Router,
 };
 use std::sync::Arc;
+
+use crate::{
+    api::{get_user_from_auth_header, return_data::ReturnData},
+    models::log::{
+        log_db::{db_get_log_by_id, db_get_logs_for_user},
+        Log,
+    },
+    AppState,
+};
 
 pub fn log_routes() -> Router<Arc<AppState>> {
     Router::<Arc<AppState>>::new()
@@ -40,7 +44,7 @@ async fn get_log_by_id(State(app_state): State<Arc<AppState>>, headers: HeaderMa
         Ok(user) => user,
         Err(e) => return e.into(),
     };
-    match db_get_log_by_id(&app_state.db, log_id).await {
+    match db_get_log_by_id(&app_state.db, log_id.as_str()).await {
         Ok(log) => ReturnData::ok(log),
         Err(e) => e.into(),
     }

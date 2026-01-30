@@ -1,26 +1,40 @@
-use super::chat_channel_db::get_chat_channel_by_id;
 use super::message::ChatMessage;
 use super::validation::CreateMessageSchema;
-use crate::db::resource_kinds::ResourceKind;
-use crate::error_handler::DbError;
-use crate::models::chat::chat_channel::ChatChannel;
+use crate::{
+    db::{str_to_object_id, MongoModel, PatDatabase},
+    error_handler::DbError,
+    models::chat::chat_channel::ChatChannel,
+};
 use futures::TryStreamExt;
-use mongodb::bson::oid::ObjectId;
-use mongodb::error::{TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT};
-use mongodb::options::{ReadConcern, WriteConcern};
 use mongodb::{
-    bson::Bson,
-    bson::{doc, Document},
-    error::Error as MongoError,
-    ClientSession, Collection, Database,
+    bson::{doc, oid::ObjectId, Bson, Document},
+    error::{Error as MongoError, TRANSIENT_TRANSACTION_ERROR, UNKNOWN_TRANSACTION_COMMIT_RESULT},
+    options::{ReadConcern, WriteConcern},
+    ClientSession, Collection,
 };
 
-pub async fn insert_chat_message(pool: &Database, data: CreateMessageSchema, user_id: &str) -> Result<ChatMessage, DbError> {
-    let chat_message_collection: Collection<Document> = pool.collection("chat_messages");
-    let channel_collection: Collection<ChatChannel> = pool.collection("chat_channels");
+impl MongoModel for ChatMessage {
+    fn collection_name() -> &'static str {
+        "chat_messages"
+    }
+    fn model_name() -> &'static str {
+        "Chat Message"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
+}
 
+pub async fn insert_chat_message(db_handle: &PatDatabase, data: CreateMessageSchema, user_id: &str) -> Result<ChatMessage, DbError> {
+    let chat_message_collection: Collection<Document> = db_handle.get_type_agnostic_collection(ChatMessage::collection_name());
+    let channel_collection: Collection<ChatChannel> = db_handle.get_collection();
+
+    // TODO: SESSION HANDLING SHOULD BE DONE IN A STANDARD WAY AND NOT IN THIS METHOD
     // Begin a session to create a chat message and update the relevant chat channel
-    let mut session = pool.client().start_session().await?;
+    let mut session = db_handle.pool_ref().client().start_session().await?;
     // Read/write concern taken from the docs, unsure how relevant they are here
     session
         .start_transaction()
@@ -28,22 +42,9 @@ pub async fn insert_chat_message(pool: &Database, data: CreateMessageSchema, use
         .write_concern(WriteConcern::majority())
         .await?;
 
-    let mut loop_counter = 0;
-    while let Err(error) = execute_chat_message_transaction(&chat_message_collection, &channel_collection, &mut session, data.clone(), user_id).await
-    {
-        // Emergency safety valve to stop an infinite hang if mongo behaves strangely
-        loop_counter += 1;
-        if loop_counter > 500 {
-            return Err(MongoError::custom("Exceeded retries").into());
-        }
-        if !error.contains_label(TRANSIENT_TRANSACTION_ERROR) {
-            return Err(error.into());
-        }
-    }
-
-    let channel = get_chat_channel_by_id(pool, data.channel_id.as_str()).await?;
-
-    get_chat_message_by_atomic_id(pool, channel.id.as_str(), channel.most_recent_message_id).await
+    let new_message_id = execute_chat_message_transaction(&chat_message_collection, &channel_collection, &mut session, data.clone(), user_id).await?;
+    let filter_doc = doc! {"_id": new_message_id};
+    db_handle.find_one(filter_doc).await
 }
 
 // TODO: Session pattern should be more generic so I don't need to do this every time I use a session in the future
@@ -53,12 +54,9 @@ async fn execute_chat_message_transaction(
     session: &mut ClientSession,
     data: CreateMessageSchema,
     user_id: &str,
-) -> Result<(), MongoError> {
+) -> Result<ObjectId, MongoError> {
     // Get the channel associated with this message
-    let channel_id: ObjectId = match data.channel_id.parse() {
-        Ok(bson_id) => bson_id,
-        Err(_) => return Err(MongoError::custom("Failed to parse ObjectId of a channel")),
-    };
+    let channel_id = str_to_object_id(data.channel_id.as_str())?;
     let filter_doc = doc! {"_id": Bson::ObjectId(channel_id)};
     let channel = match channel_collection.find_one(filter_doc).session(&mut *session).await? {
         Some(channel) => channel,
@@ -73,7 +71,11 @@ async fn execute_chat_message_transaction(
     let channel_filter_doc = doc! { "_id": Bson::ObjectId(channel_id) };
     let channel_update = doc! { "$set": { "most_recent_message_id": new_atomic_id }};
 
-    chat_message_collection.insert_one(insert_message_doc).session(&mut *session).await?;
+    let insert_result = chat_message_collection.insert_one(insert_message_doc).session(&mut *session).await?;
+    let message_id = insert_result
+        .inserted_id
+        .as_object_id()
+        .ok_or(MongoError::custom("Failed to parse an insertion ID to ObjectID"))?;
     channel_collection
         .update_one(channel_filter_doc, channel_update)
         .session(&mut *session)
@@ -87,7 +89,7 @@ async fn execute_chat_message_transaction(
         }
         let result = session.commit_transaction().await;
         if let Err(error) = result {
-            if error.contains_label(UNKNOWN_TRANSACTION_COMMIT_RESULT) {
+            if error.contains_label(UNKNOWN_TRANSACTION_COMMIT_RESULT) || error.contains_label(TRANSIENT_TRANSACTION_ERROR) {
                 continue;
             }
             return Err(error);
@@ -96,24 +98,17 @@ async fn execute_chat_message_transaction(
         // the transaction again, but the transaction has already succeeded. This will cause an
         // error that the transaction has already ended, and will loop for forever. The `if let Err()`
         // is already capturing errors, so this has to be an Ok
-        return result;
+        return Ok(message_id);
     }
 }
 
-pub async fn get_chat_message_by_atomic_id(pool: &Database, channel_id: &str, atomic_id: i64) -> Result<ChatMessage, DbError> {
-    let collection: Collection<ChatMessage> = pool.collection("chat_messages");
-    let doc = doc! {"channel_id": channel_id, "atomic_id": atomic_id};
-    match collection.find_one(doc).await {
-        Ok(maybe_record) => match maybe_record {
-            Some(record) => Ok(record),
-            None => Err(DbError::NotFound(ResourceKind::ChatMessage, atomic_id.to_string())),
-        },
-        Err(e) => Err(e.into()),
-    }
-}
-
-pub async fn get_chat_message_span(pool: &Database, atomic_id: i64, channel_id: &str, message_count: i64) -> Result<Vec<ChatMessage>, DbError> {
-    let collection: Collection<ChatMessage> = pool.collection("chat_messages");
+pub async fn get_chat_message_span(
+    db_handle: &PatDatabase,
+    atomic_id: i64,
+    channel_id: &str,
+    message_count: i64,
+) -> Result<Vec<ChatMessage>, DbError> {
+    let collection: Collection<ChatMessage> = db_handle.get_collection();
     let lower_range = (atomic_id - message_count).max(0);
     let doc = doc! {
         "channel_id": channel_id,

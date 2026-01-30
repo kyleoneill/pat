@@ -2,9 +2,9 @@ pub mod games_db;
 pub mod validation;
 
 use rand::seq::SliceRandom;
-
-use super::deserialize_id;
 use serde::{Deserialize, Serialize};
+
+use crate::models::deserialize_id;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConnectionGame {
