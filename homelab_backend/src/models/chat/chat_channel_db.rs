@@ -1,6 +1,3 @@
-use mongodb::bson::{doc, Bson, Document};
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::{
     db::{str_to_object_id, MongoModel, PatDatabase},
     error_handler::DbError,
@@ -13,6 +10,23 @@ use crate::{
         user::{user_db::db_get_user_by_id, ReturnUser},
     },
 };
+use mongodb::bson::{doc, oid::ObjectId, Bson, Document};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+impl MongoModel for ChatChannel {
+    fn collection_name() -> &'static str {
+        "chat_channels"
+    }
+    fn model_name() -> &'static str {
+        "Chat Channel"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
+}
 
 pub async fn insert_chat_channel(db_handle: &PatDatabase, data: &CreateChannelSchema, user_id: String) -> Result<ChatChannel, DbError> {
     let date_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;

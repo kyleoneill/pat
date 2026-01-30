@@ -14,6 +14,36 @@ use crate::{
     },
 };
 
+impl MongoModel for Reminder {
+    fn collection_name() -> &'static str {
+        "reminders"
+    }
+    fn model_name() -> &'static str {
+        "Reminder"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
+}
+
+impl MongoModel for Category {
+    fn collection_name() -> &'static str {
+        "categories"
+    }
+    fn model_name() -> &'static str {
+        "Reminder Category"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
+}
+
 // Categories
 pub async fn insert_category(db_handle: &PatDatabase, data: &CreateCategorySchema, user_id: String) -> Result<Category, DbError> {
     let doc = doc! {

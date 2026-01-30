@@ -127,12 +127,13 @@ impl PatDatabase {
     {
         let collection: Collection<T> = self.pool.collection(T::collection_name());
 
-        // For some unknowable reason find_one_and_update, by default, returns the matching document
-        // BEFORE updating it and must be told to return the document AFTER it is updated
+        // find_one_and_update acts like an atomic operation and by default "swaps" the new and old
+        // documents, meaning that the default behavior is to return the document _before_ it's
+        // updated. This isn't what's desired for this helper, so use an option to get
+        // the document _after_ the update
         let update_options = FindOneAndUpdateOptions::builder()
             .return_document(Some(mongodb::options::ReturnDocument::After))
             .build();
-
         match collection
             .find_one_and_update(filter_doc, update_doc)
             .with_options(Some(update_options))

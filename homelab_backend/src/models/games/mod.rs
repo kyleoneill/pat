@@ -1,11 +1,10 @@
 pub mod games_db;
 pub mod validation;
 
-use mongodb::bson::oid::ObjectId;
 use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 
-use crate::{db::MongoModel, error_handler::DbError, models::deserialize_id};
+use crate::models::deserialize_id;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConnectionGame {
@@ -16,21 +15,6 @@ pub struct ConnectionGame {
     pub slug: String,
     pub author_id: String,
     pub creation_datetime: i64,
-}
-
-impl MongoModel for ConnectionGame {
-    fn collection_name() -> &'static str {
-        "game_connections"
-    }
-    fn model_name() -> &'static str {
-        "Connections Game"
-    }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -1,6 +1,6 @@
 use super::super::deserialize_id;
-use crate::{db::MongoModel, error_handler::DbError, models::user::ReturnUser};
-use mongodb::bson::{doc, oid::ObjectId, Bson};
+use crate::models::user::ReturnUser;
+use mongodb::bson::{doc, Bson};
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, PartialEq, Clone, Debug)]
@@ -79,21 +79,6 @@ pub struct ChatChannel {
     pub owner_id: String,
     pub created_at: i64,
     pub most_recent_message_id: i64,
-}
-
-impl MongoModel for ChatChannel {
-    fn collection_name() -> &'static str {
-        "chat_channels"
-    }
-    fn model_name() -> &'static str {
-        "Chat Channel"
-    }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize)]

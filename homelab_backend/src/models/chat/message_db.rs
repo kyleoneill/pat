@@ -1,8 +1,10 @@
 use super::message::ChatMessage;
 use super::validation::CreateMessageSchema;
-use crate::db::{str_to_object_id, MongoModel, PatDatabase};
-use crate::error_handler::DbError;
-use crate::models::chat::chat_channel::ChatChannel;
+use crate::{
+    db::{str_to_object_id, MongoModel, PatDatabase},
+    error_handler::DbError,
+    models::chat::chat_channel::ChatChannel,
+};
 use futures::TryStreamExt;
 use mongodb::{
     bson::{doc, oid::ObjectId, Bson, Document},
@@ -10,6 +12,21 @@ use mongodb::{
     options::{ReadConcern, WriteConcern},
     ClientSession, Collection,
 };
+
+impl MongoModel for ChatMessage {
+    fn collection_name() -> &'static str {
+        "chat_messages"
+    }
+    fn model_name() -> &'static str {
+        "Chat Message"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
+}
 
 pub async fn insert_chat_message(db_handle: &PatDatabase, data: CreateMessageSchema, user_id: &str) -> Result<ChatMessage, DbError> {
     let chat_message_collection: Collection<Document> = db_handle.get_type_agnostic_collection(ChatMessage::collection_name());

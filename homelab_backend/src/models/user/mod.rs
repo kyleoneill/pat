@@ -2,10 +2,9 @@ pub mod jwt;
 pub mod user_db;
 pub mod validation;
 
-use mongodb::bson::{oid::ObjectId, Bson};
+use mongodb::bson::Bson;
 
 use super::deserialize_id;
-use crate::{db::MongoModel, error_handler::DbError};
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, PartialEq, Debug)]
@@ -63,21 +62,6 @@ pub struct User {
     #[serde(deserialize_with = "deserialize")]
     pub auth_level: AuthLevel,
     pub salt: String,
-}
-
-impl MongoModel for User {
-    fn collection_name() -> &'static str {
-        "users"
-    }
-    fn model_name() -> &'static str {
-        "User"
-    }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
-    }
 }
 
 impl User {

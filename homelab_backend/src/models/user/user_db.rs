@@ -5,6 +5,21 @@ use crate::{
 };
 use mongodb::bson::{doc, oid::ObjectId, Bson, Document};
 
+impl MongoModel for User {
+    fn collection_name() -> &'static str {
+        "users"
+    }
+    fn model_name() -> &'static str {
+        "User"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
+}
+
 pub async fn db_create_user(db_handle: &PatDatabase, username: String, hash: String, auth_level: AuthLevel, salt: String) -> Result<User, DbError> {
     let doc = doc! {
         "username": username,

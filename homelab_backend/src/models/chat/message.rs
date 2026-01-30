@@ -1,6 +1,5 @@
 use super::super::deserialize_id;
-use crate::{db::MongoModel, error_handler::DbError};
-use mongodb::bson::{doc, oid::ObjectId, Bson};
+use mongodb::bson::{doc, Bson};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -49,19 +48,4 @@ pub struct ChatMessage {
     pub reactions: Vec<Reactions>,
     pub pinned: bool,
     pub atomic_id: i64,
-}
-
-impl MongoModel for ChatMessage {
-    fn collection_name() -> &'static str {
-        "chat_messages"
-    }
-    fn model_name() -> &'static str {
-        "Chat Message"
-    }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
-    }
 }

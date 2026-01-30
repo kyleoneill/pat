@@ -1,12 +1,26 @@
 use super::{validation::CreateConnectionGameSchema, ConnectionGame};
-use mongodb::bson::doc;
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use crate::{
     db::{MongoModel, PatDatabase},
     error_handler::DbError,
     models::name_to_slug,
 };
+use mongodb::bson::{doc, oid::ObjectId};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+impl MongoModel for ConnectionGame {
+    fn collection_name() -> &'static str {
+        "game_connections"
+    }
+    fn model_name() -> &'static str {
+        "Connections Game"
+    }
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.id.parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
+}
 
 pub async fn insert_connections_game(db_handle: &PatDatabase, data: &CreateConnectionGameSchema, user_id: String) -> Result<ConnectionGame, DbError> {
     let slug = name_to_slug(data.puzzle_name.as_str());

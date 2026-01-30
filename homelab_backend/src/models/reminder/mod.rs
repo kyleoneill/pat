@@ -2,8 +2,7 @@ pub mod reminder_db;
 pub mod validation;
 
 use super::deserialize_id;
-use crate::{db::MongoModel, error_handler::DbError};
-use mongodb::bson::{oid::ObjectId, Bson};
+use mongodb::bson::Bson;
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
@@ -59,21 +58,6 @@ pub struct Category {
     pub user_id: String,
 }
 
-impl MongoModel for Category {
-    fn collection_name() -> &'static str {
-        "categories"
-    }
-    fn model_name() -> &'static str {
-        "Reminder Category"
-    }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Reminder {
     #[serde(rename = "_id", deserialize_with = "deserialize_id")]
@@ -85,19 +69,4 @@ pub struct Reminder {
     pub priority: Priority,
     pub user_id: String,
     pub date_time: i64,
-}
-
-impl MongoModel for Reminder {
-    fn collection_name() -> &'static str {
-        "reminders"
-    }
-    fn model_name() -> &'static str {
-        "Reminder"
-    }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
-    }
 }
