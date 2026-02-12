@@ -1,6 +1,6 @@
-use crate::{db::MongoModel, models::log::Log};
-use mongodb::bson::{doc, Document};
-use mongodb::{Collection, Database};
+use crate::db::PatDatabase;
+use crate::models::log::Log;
+use mongodb::bson::doc;
 use std::fmt::{Display, Formatter};
 
 pub struct LogCreationTask {
@@ -25,13 +25,11 @@ impl LogCreationTask {
             date_time,
         }
     }
-    pub async fn run_task(&self, database: &Database) {
-        // TODO: This should have a PatDatabase instead of a Database and use
-        //       PatDatabase::insert_one
-        let collection: Collection<Document> = database.collection(Log::collection_name());
+    pub async fn write_log(&self, db_handle: &PatDatabase) {
         let mut uri = self.uri.clone();
         if uri.starts_with("/api/chat/ws?auth_token=") {
             // This is a bit hacky and should be made to support a general-purpose solution to the problem
+            // Websocket authentication includes the token as a query param in the uri, so redact it
             uri = "/api/chat/ws?auth_token=<redacted>".to_string()
         }
         let doc = doc! {
@@ -40,6 +38,6 @@ impl LogCreationTask {
             "user_id": self.user_id.clone(),
             "date_time": self.date_time
         };
-        let _res = collection.insert_one(doc).await;
+        let _res = db_handle.insert_one::<Log>(doc).await;
     }
 }

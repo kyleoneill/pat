@@ -38,7 +38,7 @@ pub async fn insert_connections_game(db_handle: &PatDatabase, data: &CreateConne
         "author_id": user_id,
         "creation_datetime": date_time,
     };
-    db_handle.insert_and_retrieve_one(ConnectionGame::collection_name(), doc).await
+    db_handle.insert_and_retrieve_one(doc).await
 }
 
 pub async fn get_connection_game_by_slug(db_handle: &PatDatabase, slug: &str) -> Result<ConnectionGame, DbError> {

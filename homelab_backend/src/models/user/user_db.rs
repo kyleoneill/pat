@@ -27,7 +27,7 @@ pub async fn db_create_user(db_handle: &PatDatabase, username: String, hash: Str
         "auth_level": auth_level,
         "salt": salt
     };
-    db_handle.insert_and_retrieve_one(User::collection_name(), doc).await
+    db_handle.insert_and_retrieve_one(doc).await
 }
 
 pub async fn db_update_user(db_handle: &PatDatabase, user: User, update_data: UpdateUserSchema) -> Result<User, DbError> {

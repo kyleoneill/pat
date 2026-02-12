@@ -23,6 +23,9 @@ pub trait MongoModel {
     fn mongo_id(&self) -> Result<ObjectId, DbError>;
 }
 
+// Derives clone so tasks can copy a handle to the pool to be moved into an async block, cloning
+// this is fine as Database is an Arc<_>
+#[derive(Clone)]
 pub struct PatDatabase {
     pool: Database,
 }
@@ -81,11 +84,11 @@ impl PatDatabase {
         }
     }
 
-    pub async fn insert_one<T>(&self, collection_name: &str, insertion_data: Document) -> Result<ObjectId, DbError>
+    pub async fn insert_one<T>(&self, insertion_data: Document) -> Result<ObjectId, DbError>
     where
         T: MongoModel + Send + Sync + DeserializeOwned,
     {
-        let collection: Collection<Document> = self.pool.collection(collection_name);
+        let collection: Collection<Document> = self.pool.collection(T::collection_name());
         match collection.insert_one(insertion_data).await {
             Ok(res) => match res.inserted_id {
                 Bson::ObjectId(id) => Ok(id),
@@ -95,11 +98,11 @@ impl PatDatabase {
         }
     }
 
-    pub async fn insert_and_retrieve_one<T>(&self, collection_name: &str, insertion_data: Document) -> Result<T, DbError>
+    pub async fn insert_and_retrieve_one<T>(&self, insertion_data: Document) -> Result<T, DbError>
     where
         T: MongoModel + Send + Sync + DeserializeOwned,
     {
-        let object_id = self.insert_one::<T>(collection_name, insertion_data).await?;
+        let object_id = self.insert_one::<T>(insertion_data).await?;
         let doc = doc! {"_id": object_id};
         self.find_one(doc).await
     }

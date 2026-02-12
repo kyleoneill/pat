@@ -3,8 +3,6 @@ mod log_testing {
     use crate::testing::helpers::log_helpers::get_logs_for_user;
     use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
     use crate::testing::TestHelper;
-    use std::time::Duration;
-    use tokio::time::sleep;
 
     #[tokio::test]
     async fn log_generation() {
@@ -28,10 +26,15 @@ mod log_testing {
         let user = get_user_me(&helper.client, token.as_str(), &helper.address).await.unwrap();
         get_user_me(&helper.client, token.as_str(), &helper.address).await.unwrap();
 
-        // Wait for the log task to run
-        // TODO: _NEED_ to find a way to run this task right here and not wait, tests should not
-        //       contain real waits
-        sleep(Duration::from_secs(7)).await;
+        // Run the log generation task manually rather than waiting for it
+        {
+            helper
+                .task_manager
+                .lock()
+                .expect("Failed to get task manager mutex lock")
+                .run_logs_task()
+                .await;
+        }
 
         // Get logs
         let logs = get_logs_for_user(&helper.client, token.as_str(), &helper.address).await.unwrap();
@@ -53,10 +56,15 @@ mod log_testing {
             .unwrap();
         let user_two = get_user_me(&helper.client, token_two.as_str(), &helper.address).await.unwrap();
 
-        // Wait for the log task to run
-        // TODO: _NEED_ to find a way to run this task right here and not wait, tests should not
-        //       contain real waits
-        sleep(Duration::from_secs(7)).await;
+        // Run the log generation task manually rather than waiting for it
+        {
+            helper
+                .task_manager
+                .lock()
+                .expect("Failed to get task manager mutex lock")
+                .run_logs_task()
+                .await;
+        }
 
         // Get logs for the second user
         let logs = get_logs_for_user(&helper.client, token_two.as_str(), &helper.address).await.unwrap();

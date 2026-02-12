@@ -17,13 +17,17 @@ use crate::{
         reminder::{Category, Reminder},
         user::User,
     },
+    tasks::task_manager::TaskManager,
 };
 use axum::body::Body;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
 use mongodb::{bson::doc, Collection, Database};
 use serde::Serialize;
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 use tokio::net::TcpListener;
 
 // This ID is almost guaranteed to never exist :)
@@ -33,6 +37,7 @@ pub struct TestHelper {
     pub client: Client<HttpConnector, Body>,
     pub address: SocketAddr,
     pub database: Database,
+    pub task_manager: Arc<Mutex<TaskManager>>,
 }
 
 impl TestHelper {
@@ -42,14 +47,19 @@ impl TestHelper {
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let app = generate_app(database.clone()).await;
+        let (app, task_manager) = generate_app(database.clone()).await;
         tokio::spawn(async move {
             axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
                 .await
                 .unwrap()
         });
         let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
-        let helper = Self { client, address, database };
+        let helper = Self {
+            client,
+            address,
+            database,
+            task_manager,
+        };
         helper.wipe_database().await;
         helper
     }

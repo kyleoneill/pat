@@ -1,10 +1,12 @@
 #[macro_use]
 extern crate dotenv_codegen;
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::{mpsc, Arc};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{mpsc, Arc, Mutex},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 mod api;
 mod db;
@@ -27,7 +29,7 @@ use axum::http::Method;
 use axum::{http::Request, routing::get, Router};
 use hyper::header::UPGRADE;
 use tokio::{
-    sync::{mpsc as tokio_mpsc, RwLock},
+    sync::{mpsc as tokio_mpsc, watch, RwLock},
     task, time,
 };
 use tower::ServiceBuilder;
@@ -40,9 +42,8 @@ use tower_http::{
 
 use tracing::Span;
 
+use crate::{db::PatDatabase, models::chat::packet::WebSocketResponse, tasks::task_manager::TaskManager};
 use mongodb::Database;
-
-use crate::{db::PatDatabase, models::chat::packet::WebSocketResponse};
 use tower_http::trace::DefaultMakeSpan;
 
 const LOGGABLE_METHODS: [Method; 4] = [Method::GET, Method::PUT, Method::POST, Method::DELETE];
@@ -55,6 +56,7 @@ pub struct AppState {
     // single time there is a connect/disconnect and prevent processing messages being sent while
     // active_connections is being updated
     pub active_connections: RwLock<HashMap<String, tokio_mpsc::UnboundedSender<WebSocketResponse>>>,
+    pub task_manager: Arc<Mutex<TaskManager>>,
 }
 
 #[derive(Debug, Clone)]
@@ -80,13 +82,13 @@ impl Config {
     }
 }
 
-pub async fn generate_app(database: Database) -> Router {
+pub async fn generate_app(database: Database) -> (Router, Arc<Mutex<TaskManager>>) {
     // Set up app config and the database pool
     let config = Config::init();
 
     // Copy the app secret and db handle as they are passed to tasks and on_request events
     let app_secret = config.app_secret.clone();
-    let handle = database.clone();
+    let handle = PatDatabase::new(database);
 
     // Define the API routes
     let api_routes = Router::<Arc<AppState>>::new()
@@ -163,34 +165,55 @@ pub async fn generate_app(database: Database) -> Router {
         .compression();
 
     // Set up tasks
+    let cloned_handle = handle.clone();
+    let (log_sender, mut log_receiver) = watch::channel("log trigger channel");
+    let (log_response_sender, log_response_receiver) = watch::channel("log response channel");
     #[allow(clippy::let_underscore_future)]
     let _create_request_logs = task::spawn(async move {
         // Log creation task will run every 5 seconds
         let mut interval = time::interval(Duration::from_secs(5));
+        interval.tick().await; // The first tick of an interval resolves instantly
+        let mut should_respond = false;
         loop {
-            interval.tick().await;
-            // TODO: This is making one database op per request, I should be batching these inserts
-            // Ex, make a collection after the tick().await, fill it in the while loop, and then
-            //     after the while loop make one batched db insert
+            // This select! allows the task to be run manually so we don't need to wait in a test
+            tokio::select! {
+                _ = interval.tick() => {}
+                _ = log_receiver.changed() => {
+                    // Reset the tick interval as the task was manually called some portion of time
+                    // into the wait
+                    interval.reset();
+                    should_respond = true;
+                }
+            }
             while let Ok(rec) = log_rx.try_recv() {
-                rec.run_task(&handle).await;
+                rec.write_log(&cloned_handle).await;
+            }
+            // This is kind of hacky?
+            if should_respond {
+                let _ = log_response_sender.send("Jobs done");
+                should_respond = false;
             }
         }
     });
 
+    let task_manager = Arc::new(Mutex::new(TaskManager::new(handle.clone(), log_sender, log_response_receiver)));
+
     // Create app state and the router
     let state = Arc::new(AppState {
-        db: PatDatabase::new(database),
+        db: handle,
         config,
         active_connections: RwLock::new(HashMap::new()),
+        task_manager: task_manager.clone(),
     });
-    Router::<Arc<AppState>>::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        .nest("/api", api_routes)
-        .with_state(state)
-        .layer(middleware)
-        .layer(trace_layer)
+    (
+        Router::<Arc<AppState>>::new()
+            .route("/", get(root))
+            .nest("/api", api_routes)
+            .with_state(state)
+            .layer(middleware)
+            .layer(trace_layer),
+        task_manager,
+    )
 }
 
 #[tokio::main]
@@ -205,7 +228,7 @@ async fn main() {
     // run our app with hyper, listening on 127.0.0.1:3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
     logger::log_msg(format!("listening on {}", listener.local_addr().unwrap()));
-    let app = generate_app(database).await;
+    let (app, _) = generate_app(database).await;
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .unwrap();

@@ -42,7 +42,7 @@ pub async fn insert_chat_channel(db_handle: &PatDatabase, data: &CreateChannelSc
         "created_at": date_time,
         "most_recent_message_id": 0,
     };
-    db_handle.insert_and_retrieve_one(ChatChannel::collection_name(), doc).await
+    db_handle.insert_and_retrieve_one(doc).await
 }
 
 // pub async fn get_chat_channel_by_slug_and_user_id(db_handle: &PatDatabase, slug: &str, user_id: &str) -> Result<ChatChannel, DbError> {
