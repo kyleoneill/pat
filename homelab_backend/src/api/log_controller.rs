@@ -8,11 +8,11 @@ use std::sync::Arc;
 
 use crate::{
     api::{get_user_from_auth_header, return_data::ReturnData},
+    app::AppState,
     models::log::{
         log_db::{db_get_log_by_id, db_get_logs_for_user},
         Log,
     },
-    AppState,
 };
 
 pub fn log_routes() -> Router<Arc<AppState>> {

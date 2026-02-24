@@ -8,8 +8,8 @@ mod reminder_testing;
 mod user_testing;
 
 use crate::{
+    app::generate_app,
     db::{db_setup, MongoModel},
-    generate_app,
     models::{
         chat::{chat_channel::ChatChannel, message::ChatMessage},
         games::ConnectionGame,
