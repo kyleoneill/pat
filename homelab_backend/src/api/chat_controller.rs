@@ -8,7 +8,7 @@ use crate::models::chat::{
     packet::{MessageCreatedResponse, WebSocketRequest, WebSocketResponse},
     validation::CreateChannelSchema,
 };
-use crate::{logger, AppState};
+use crate::{app::AppState, logger};
 use axum::{
     body::Body,
     extract::{

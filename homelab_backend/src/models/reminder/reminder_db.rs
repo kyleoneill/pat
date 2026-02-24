@@ -51,7 +51,7 @@ pub async fn insert_category(db_handle: &PatDatabase, data: &CreateCategorySchem
         "name": data.name.clone(),
         "user_id": user_id
     };
-    db_handle.insert_and_retrieve_one(Category::collection_name(), doc).await
+    db_handle.insert_and_retrieve_one(doc).await
 }
 
 pub async fn get_categories_for_user(db_handle: &PatDatabase, user_id: String) -> Result<Vec<Category>, DbError> {
@@ -103,7 +103,7 @@ pub async fn insert_reminder(db_handle: &PatDatabase, data: &CreateReminderSchem
         "categories": data.categories.clone()
     };
 
-    db_handle.insert_and_retrieve_one(Reminder::collection_name(), doc).await
+    db_handle.insert_and_retrieve_one(doc).await
 }
 
 pub async fn get_reminders_for_user(
