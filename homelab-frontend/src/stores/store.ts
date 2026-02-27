@@ -26,5 +26,5 @@ export const globalState = reactive({
   setWebsocketConnection(connection: WebSocket | null): void {
     this.websocketConnection = connection;
   },
-  chatMessages: new Map(),
+  chatMessages: new Map<String, Array<ChatMessage>>(),
 } as State)

@@ -17,12 +17,21 @@
 
   const chatChannels: Ref<Array<ChatChannel>> = ref([]);
   const selectedChannel: Ref<ChatChannel | null> = ref(null);
-  let selectedChannelName: String | null = null;
+  const selectedChannelName: Ref<string> = ref("");
   let selectedChannelUserMap: Map<String, String> = new Map();
 
   const scrollableArea = useTemplateRef('scrollable-area');
 
+  function scrollToBottom() {
+    if (scrollableArea.value) {
+      scrollableArea.value.scrollTop = scrollableArea.value?.scrollHeight;
+    }
+  }
+
   function selectChatChannel(channel: ChatChannel) {
+    //  TODO: All of my frontend logic for loading messages and channels sucks and should be tossed and re-done in a more
+    //        comprehensive and readable fashion
+
     if (selectedChannel.value !== null && selectedChannel.value._id === channel._id) {
       return;
     }
@@ -32,19 +41,24 @@
       selectedChannelUserMap.set(subscriber.id, subscriber.username);
     });
 
+    if (channel.name === null) {
+      selectedChannelName.value = channel.slug as string;
+    }
+    else {
+      selectedChannelName.value = channel.name as string;
+    }
+
     // If we have a websocket connection, load messages for the newly selected channel
     if (globalState.websocketConnection !== null) {
       const channelData: ChatChannel = selectedChannel.value as ChatChannel;
-      // TODO: Might want to re-pull the channel here, as the "most recent message" could be out of date (we do not know
-      //       how long ago the user got this channel)
-      //       Could also send updates to the client when a channel changes, in the same way that messages are sent
 
       // Verify that we don't already have the data we are about to query for
       if (globalState.chatMessages.has(channelData._id)) {
-        for (const message of globalState.chatMessages.get(channelData._id)) {
-          if (message.atomic_id === channelData.most_recent_message_id) {
-            return;
-          }
+        let most_recent_message = globalState.chatMessages.get(channelData._id)?.at(-1);
+        if (most_recent_message.atomic_id === channelData.most_recent_message_id) {
+          // TODO: This doesn't work as this is called before the area re-renders
+          scrollToBottom();
+          return;
         }
       }
 
@@ -55,12 +69,8 @@
         "data": {message_count: 25, atomic_message_id: channelData.most_recent_message_id, channel_id: channelData._id}
       };
       globalState.websocketConnection?.send(JSON.stringify(requestChatState));
-    }
-    if (channel.name === null) {
-      selectedChannelName = channel.slug;
-    }
-    else {
-      selectedChannelName = channel.name as String;
+      // TODO: This doesn't work as this is called before the area re-renders
+      scrollToBottom();
     }
   }
 
@@ -101,12 +111,18 @@
 
   // Is this the most optimal way to do this?
   // Watch global state, when it changes we assume that we have a new message
-  watch(globalState, (_newState, _oldState) => {
+  watch(globalState, (newState, _oldState) => {
     // Wait a tick to ensure the DOM has been updated with the new message
     nextTick(() => {
-      if (scrollableArea.value) {
-        // Scroll to the bottom of the chat area, so the new message is visible
-        scrollableArea.value.scrollTop = scrollableArea.value?.scrollHeight;
+      scrollToBottom();
+
+      // If we have a new message, change the most recent message for our chat channel. Do this locally
+      // rather than re-poll the server for something we can do locally
+      if (selectedChannel.value !== null) {
+        let most_recent_message = globalState.chatMessages.get(selectedChannel.value._id)?.at(-1);
+        if (most_recent_message !== undefined) {
+          selectedChannel.value.most_recent_message_id = most_recent_message.atomic_id;
+        }
       }
     });
   });
@@ -117,6 +133,7 @@
 
 <template>
   <div class="chat-container">
+    <!-- TODO: Replace this with something that actually handles the ws connection closing -->
     <div v-if="globalState.websocketConnection === null">DEBUG: WS CONNECTION IS CLOSED</div>
     <div class="channel-list">
       <div>
@@ -130,10 +147,10 @@
       </div>
     </div>
     <div>
-      <div class="chat-area" v-if="selectedChannel !== null">
+      <div class="chat-area" :key="selectedChannelName" v-if="selectedChannel !== null">
         <h2>{{ selectedChannelName }}</h2>
         <div ref="scrollable-area" class="messages-area">
-          <div v-for="(message, index) in globalState.chatMessages.get(selectedChannel._id)" :key="index">
+          <div v-for="(message, index) in globalState.chatMessages.get(selectedChannel._id)" :class="{'sent': globalState.currentUser?.id === message.author_id, 'received': globalState.currentUser?.id !== message.author_id}" :key="index">
             <div v-if="index === 0 || (globalState.chatMessages.has(selectedChannel._id) && globalState.chatMessages.get(selectedChannel._id)[index - 1].author_id !== message.author_id)">
               <span>{{ selectedChannelUserMap.get(message.author_id) || message.author_id }}</span>
               <span class="message-datetime">
@@ -143,7 +160,6 @@
             <chat-message
               :chatMessage="message"
               :authorUsername="selectedChannelUserMap.get(message.author_id) || message.author_id"
-              :sent="globalState.currentUser?.id === message.author_id"
             />
           </div>
         </div>

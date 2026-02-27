@@ -17,12 +17,17 @@ export async function connectChat(token: String) {
     }
     else if (websocketResponse.type === WebsocketResponseType.SendChatState) {
       const chatMessages: Array<ChatMessage> = websocketResponse.data;
+      let channel_id: String = "";
       chatMessages.forEach(message => {
         if (!globalState.chatMessages.has(message.channel_id)) {
           globalState.chatMessages.set(message.channel_id, []);
         }
         globalState.chatMessages.get(message.channel_id)?.push(message);
+        channel_id = message.channel_id;
       });
+      if (channel_id !== "") {
+        globalState.chatMessages.get(channel_id)?.sort((a, b) => a.atomic_id - b.atomic_id);
+      }
     }
     else if (websocketResponse.type === WebsocketResponseType.MessageCreated) {
       // TODO: This can't yet actually accomplish what it should (giving the user feedback on message creation)

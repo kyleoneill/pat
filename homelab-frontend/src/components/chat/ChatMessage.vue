@@ -4,14 +4,11 @@
   defineProps<{
     chatMessage: ChatMessage,
     authorUsername: String,
-    sent: boolean,
   }>();
 </script>
 
 <template>
-  <div class="chat-message"
-    :class="{'sent': sent, 'received': !sent}"
-  >
+  <div class="chat-message">
     <div class="chat-contents">{{ chatMessage.contents }}</div>
   </div>
 </template>
