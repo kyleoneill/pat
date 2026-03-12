@@ -1,6 +1,7 @@
 use futures::StreamExt;
 use mongodb::{
-    bson::{doc, oid::ObjectId, Bson, Document},
+    bson,
+    bson::{doc, oid::ObjectId, Bson},
     Collection,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -113,8 +114,7 @@ pub async fn get_reminders_for_user(
 ) -> Result<Vec<Reminder>, DbError> {
     let mut doc = doc! {"user_id": user_id};
 
-    if maybe_categories.is_some() {
-        let categories = maybe_categories.unwrap();
+    if let Some(categories) = maybe_categories {
         doc.insert("categories", doc! {"$in": categories});
     }
 
@@ -122,36 +122,20 @@ pub async fn get_reminders_for_user(
 }
 
 pub async fn db_update_reminder(db_handle: &PatDatabase, reminder_id: String, updates: UpdateReminderSchema) -> Result<Reminder, DbError> {
-    let mut doc = Document::new();
-
-    // TODO: This is going to be very cumbersome for update schemas with many fields. I should
-    //       make a trait or macro where I can just do schema_to_doc!()
-    if let Some(name) = updates.name {
-        doc.insert("name", name);
+    let doc = match bson::to_document(&updates) {
+        Ok(res) => res,
+        Err(_) => return Err(DbError::UnhandledException("Failed to process update request data".to_string())),
     };
 
-    if let Some(description) = updates.description {
-        doc.insert("description", description);
-    };
-
-    if let Some(priority) = updates.priority {
-        let serialized_priority: i64 = priority.into();
-        doc.insert("priority", serialized_priority);
-    };
-
-    if let Some(categories) = updates.categories {
-        doc.insert("categories", categories);
-    };
+    if doc.is_empty() {
+        return Err(DbError::EmptyDbExpression(Reminder::model_name(), "updating".to_owned()));
+    }
 
     let bson_id: ObjectId = match reminder_id.parse() {
         Ok(bson_id) => bson_id,
         Err(_) => return Err(DbError::BadId),
     };
     let filter_doc = doc! { "_id": Bson::ObjectId(bson_id) };
-
-    if doc.is_empty() {
-        return Err(DbError::EmptyDbExpression(Reminder::model_name(), "updating".to_owned()));
-    }
 
     let update_doc = doc! { "$set": doc};
     db_handle.find_and_update_one(filter_doc, update_doc).await

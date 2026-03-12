@@ -1,12 +1,14 @@
 #[cfg(test)]
 mod reminder_testing {
-    use crate::models::reminder::{validation::UpdateReminderSchema, Priority};
+    use crate::models::reminder::{validation::UpdateReminderSchema, Priority, Reminder};
+    use crate::testing::helpers::put_request;
     use crate::testing::helpers::reminder_helpers::{
         create_category, create_reminder, delete_category_by_id, delete_reminder_helper, get_categories, list_reminders, update_reminder_helper,
     };
     use crate::testing::helpers::user_helpers::{create_user, get_user_me};
     use crate::testing::TestHelper;
     use hyper::StatusCode;
+    use serde_json::json;
 
     #[tokio::test]
     async fn reminder_crud() {
@@ -148,6 +150,31 @@ mod reminder_testing {
             .expect("Failed to update a reminder");
         assert_eq!(second_update.categories, vec![created_category.id.clone()]);
         assert_eq!(second_update.name.as_str(), "new name");
+
+        // Update the priority
+        let priority_update = UpdateReminderSchema {
+            name: None,
+            description: None,
+            categories: None,
+            priority: Some(Priority::VeryHigh),
+        };
+        let update_priority = update_reminder_helper(client, addr, token.as_str(), reminders[0].id.clone(), priority_update)
+            .await
+            .expect("Failed to update a reminders priority");
+        assert_eq!(update_priority.priority, Priority::VeryHigh);
+
+        // Try to update a reminder with invalid data
+        let reminder_id = reminders[0].id.clone();
+        let update_path = format!("/reminders/{reminder_id}");
+        let bad_update_data = json!({"bad_field": 5});
+        match put_request::<serde_json::Value, Reminder>(client, update_path.as_str(), bad_update_data, token.as_str(), addr).await {
+            Ok(_) => panic!("Updating a reminder with invalid data should fail."),
+            Err((status_code, _msg)) => assert_eq!(
+                status_code,
+                StatusCode::BAD_REQUEST,
+                "Trying to update a reminder with invalid body data should 400"
+            ),
+        };
 
         // Delete a reminder
         delete_reminder_helper(client, addr, token.as_str(), reminders[0].id.clone())

@@ -30,12 +30,9 @@ impl CreateMessageSchema {
             "pinned": false,
             "atomic_id": atomic_id,
         };
-        if self.reply_to.is_some() {
-            doc.insert(
-                "reply_to",
-                self.reply_to.expect("Option should always have a value when is_some() is true"),
-            );
-        }
+        if let Some(reply_to) = self.reply_to {
+            doc.insert("reply_to", reply_to);
+        };
         doc
     }
 }

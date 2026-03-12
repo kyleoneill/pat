@@ -177,11 +177,11 @@ pub async fn generate_app(database: Database) -> (Router, Arc<Mutex<TaskManager>
             while let Ok(rec) = log_rx.try_recv() {
                 rec.write_log(&cloned_handle).await;
             }
-            
+
             // TODO: Create some kind of record that this task ran and what work it did? This is
             //       in a "unit of execution" and does not return, so there is nobody to return
-            //       this data to. 
-            
+            //       this data to.
+
             // This is kind of hacky?
             // We respond here so a manual caller has something to .await on to know when this task
             // finishes running. This allows the timed task to be run on demand in tests

@@ -17,8 +17,12 @@ pub struct CreateReminderSchema {
 
 #[derive(Serialize, Deserialize)]
 pub struct UpdateReminderSchema {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<Priority>,
 }

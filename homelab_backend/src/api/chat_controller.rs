@@ -164,8 +164,8 @@ async fn list_channels(
         }
 
         // Check if we want to filter for documents that the requester is subscribed to or not
-        if query_params.subscribed.is_some() {
-            match query_params.subscribed.unwrap() {
+        if let Some(is_subscribed) = query_params.subscribed {
+            match is_subscribed {
                 true => {
                     building_doc.insert("subscribers", user_id.as_str());
                 }
