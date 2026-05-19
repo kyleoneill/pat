@@ -207,7 +207,7 @@ async fn get_channel(State(app_state): State<Arc<AppState>>, headers: HeaderMap,
         Err(e) => return e.into(),
     };
     match get_chat_channel_by_id(pool, channel_id.as_str()).await {
-        Ok(channel) => ReturnData::ok(channel.into()),
+        Ok(channel) => ReturnData::ok(hydrate_chat_channel_subscribers(pool, channel).await),
         Err(db_err) => db_err.into(),
     }
 }

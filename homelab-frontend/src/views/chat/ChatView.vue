@@ -5,11 +5,13 @@
 
   import { nextTick, ref, useTemplateRef, watch } from 'vue';
   import { globalState } from '@/stores/store';
-  import { connectChat, listChatChannels } from '@/api/chat_api';
+  import { connectChat, listChatChannels, getChatChannel } from '@/api/chat_api';
   import useToasterStore from '@/stores/useToasterStore';
   import ChatMessage from '@/components/chat/ChatMessage.vue';
   import MessageInput from '@/components/chat/MessageInput.vue';
   import Timestamp from '@/components/shared/timestamp.vue';
+
+  const DEFAULT_MESSAGES_TO_LOAD: number = 50;
 
   const toasterStore = useToasterStore();
 
@@ -24,39 +26,46 @@
 
   function scrollToBottom() {
     if (scrollableArea.value) {
-      scrollableArea.value.scrollTop = scrollableArea.value?.scrollHeight;
+      // This is in a nextTick because some callers change the DOM and we need to wait for a re-render before moving the scroll position
+      nextTick(() => {
+        if (scrollableArea.value !== null) {
+          scrollableArea.value.lastElementChild?.scrollIntoView();
+        }
+      })
     }
   }
 
-  function selectChatChannel(channel: ChatChannel) {
-    //  TODO: All of my frontend logic for loading messages and channels sucks and should be tossed and re-done in a more
-    //        comprehensive and readable fashion
-
-    if (selectedChannel.value !== null && selectedChannel.value._id === channel._id) {
+  async function selectChatChannel(channelId: String) {
+    if (selectedChannel.value !== null && selectedChannel.value._id === channelId) {
       return;
     }
-    selectedChannel.value = channel;
+
+    // Load the selected channel so we can check its most recent message ID
+    await loadChatChannel(channelId);
+    // This shouldn't be null here unless the server does something unexpected
+    if (selectedChannel.value == null) {
+      return
+    }
+    let currentChannel: ChatChannel = selectedChannel.value;
+
     selectedChannelUserMap = new Map();
-    channel.subscribers.forEach(subscriber => {
+    currentChannel.subscribers.forEach(subscriber => {
       selectedChannelUserMap.set(subscriber.id, subscriber.username);
     });
 
-    if (channel.name === null) {
-      selectedChannelName.value = channel.slug as string;
+    if (currentChannel.name === null) {
+      selectedChannelName.value = currentChannel.slug as string;
     }
     else {
-      selectedChannelName.value = channel.name as string;
+      selectedChannelName.value = currentChannel.name as string;
     }
 
     // If we have a websocket connection, load messages for the newly selected channel
     if (globalState.websocketConnection !== null) {
-      const channelData: ChatChannel = selectedChannel.value as ChatChannel;
-
       // Verify that we don't already have the data we are about to query for
-      if (globalState.chatMessages.has(channelData._id)) {
-        let most_recent_message = globalState.chatMessages.get(channelData._id)?.at(-1);
-        if (most_recent_message.atomic_id === channelData.most_recent_message_id) {
-          // TODO: This doesn't work as this is called before the area re-renders
+      if (globalState.chatMessages.has(currentChannel._id)) {
+        let most_recent_message = globalState.chatMessages.get(currentChannel._id)?.at(-1);
+        if (most_recent_message.atomic_id === currentChannel.most_recent_message_id) {
           scrollToBottom();
           return;
         }
@@ -66,11 +75,24 @@
       //       most recent message, in case the channels most recent id field is out of date
       const requestChatState: WebSocketRequest = {
         "type": WebsocketRequestType.GetChatState,
-        "data": {message_count: 25, atomic_message_id: channelData.most_recent_message_id, channel_id: channelData._id}
+        "data": {message_count: DEFAULT_MESSAGES_TO_LOAD, atomic_message_id: currentChannel.most_recent_message_id, channel_id: currentChannel._id}
       };
       globalState.websocketConnection?.send(JSON.stringify(requestChatState));
-      // TODO: This doesn't work as this is called before the area re-renders
       scrollToBottom();
+    }
+  }
+
+  async function loadChatChannel(channelId: String) {
+    loading.value = true;
+    try {
+      let response = await getChatChannel(channelId);
+      selectedChannel.value = response.data;
+    }
+    catch (error) {
+      toasterStore.responseError({error: error});
+    }
+    finally {
+      loading.value = false;
     }
   }
 
@@ -141,7 +163,7 @@
       </div>
       <hr />
       <div v-for="(channel, index) in chatChannels" :key="index" class="channel-listing">
-        <a @click="selectChatChannel(channel)">
+        <a @click="selectChatChannel(channel._id)">
           <span> {{ channel.name || channel.slug }}</span>
         </a>
       </div>

@@ -9,13 +9,16 @@ export async function connectChat(token: String) {
   socket.onmessage = (event) => {
     const websocketResponse = JSON.parse(event.data);
     if (websocketResponse.type === WebsocketResponseType.SendChatMessage) {
+      // We got a chat message from the server
       const chatMessage: ChatMessage = websocketResponse.data;
+      // If the chatMessages map doesn't have this channel, make an entry for it
       if (!globalState.chatMessages.has(chatMessage.channel_id)) {
         globalState.chatMessages.set(chatMessage.channel_id, []);
       }
       globalState.chatMessages.get(chatMessage.channel_id)?.push(chatMessage);
     }
     else if (websocketResponse.type === WebsocketResponseType.SendChatState) {
+      // The server sent an array of chat messages to give us a chat state
       const chatMessages: Array<ChatMessage> = websocketResponse.data;
       let channel_id: String = "";
       chatMessages.forEach(message => {
@@ -57,6 +60,10 @@ export async function createChatChannel(channelData: CreateChatChannelData) {
 
 export async function listChatChannels(channelListParams?: ListChatChannelsParams) {
   return await axios.get("/chat/channels", {params: channelListParams});
+}
+
+export async function getChatChannel(channelId: String) {
+  return await axios.get(`/chat/channels/${channelId}`)
 }
 
 export async function chatChannelSubscribe(subscribeData: ChatChannelSubscribeData) {
