@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  import type { Ref } from 'vue';
+  import { onMounted, type Ref } from 'vue';
   import type { ChatChannel } from '@/models/chat_interfaces';
   import { WebsocketRequestType, type WebSocketRequest } from '@/models/chat_interfaces';
 
@@ -22,6 +22,8 @@
   const selectedChannelName: Ref<string> = ref("");
   let selectedChannelUserMap: Map<String, String> = new Map();
 
+  // let observer = null;
+  // const detectTopOfScrollArea = useTemplateRef('scrollable-area-top');
   const scrollableArea = useTemplateRef('scrollable-area');
 
   function scrollToBottom() {
@@ -31,7 +33,38 @@
         if (scrollableArea.value !== null) {
           scrollableArea.value.lastElementChild?.scrollIntoView();
         }
+
+        // TODO: This isn't really working for a number of reasons. It fires when the area is initially loaded, and it sends multiple requests to the server (as the event fires repeatedly)
+        //       causing the server to process the same request multiple times. This increases load for no reason and causes the client to get duplicate messages
+        // if (detectTopOfScrollArea.value !== null) {
+        //   observer = new IntersectionObserver(loadMessagesFromScroll, {
+        //     threshold: 1.0,
+        //   });
+        //   observer.observe(detectTopOfScrollArea.value)
+        // }
       })
+    }
+  }
+
+  function loadMessagesFromScroll() {
+    if (loading.value === false && selectedChannel.value !== null) {
+      loading.value = true;
+      
+      let messages = globalState.chatMessages.get(selectedChannel.value._id);
+      if (messages !== undefined && messages?.length > 0) {
+        let most_recent_message = messages[0];
+        if (most_recent_message.atomic_id > 1) {
+          // TODO: This should probably be a function
+          const requestChatState: WebSocketRequest = {
+            "type": WebsocketRequestType.GetChatState,
+            "data": {message_count: DEFAULT_MESSAGES_TO_LOAD, atomic_message_id: most_recent_message.atomic_id - 1, channel_id: selectedChannel.value._id}
+          };
+          globalState.websocketConnection?.send(JSON.stringify(requestChatState));
+        }
+      }
+
+      // This isn't really true, but not sure how else to set it at the "right moment"?
+      loading.value = false;
     }
   }
 
@@ -79,6 +112,22 @@
       };
       globalState.websocketConnection?.send(JSON.stringify(requestChatState));
       scrollToBottom();
+    }
+  }
+
+  async function requestMessages() {
+    if (selectedChannel.value !== null) {
+      let messages = globalState.chatMessages.get(selectedChannel.value._id);
+      if (messages !== undefined && messages.length > 0) {
+        let most_recent_message = messages[0];
+        if (most_recent_message.atomic_id > 1) {
+          const requestChatState: WebSocketRequest = {
+            "type": WebsocketRequestType.GetChatState,
+            "data": {message_count: DEFAULT_MESSAGES_TO_LOAD, atomic_message_id: most_recent_message.atomic_id - 1, channel_id: selectedChannel.value._id}
+          };
+          globalState.websocketConnection?.send(JSON.stringify(requestChatState));
+        }
+      }
     }
   }
 
@@ -172,6 +221,8 @@
       <div class="chat-area" :key="selectedChannelName" v-if="selectedChannel !== null">
         <h2>{{ selectedChannelName }}</h2>
         <div ref="scrollable-area" class="messages-area">
+          <!-- <div ref="scrollable-area-top"></div> -->
+          <button :disabled="loading === true" @click="requestMessages">Load more messages</button>
           <div v-for="(message, index) in globalState.chatMessages.get(selectedChannel._id)" :class="{'sent': globalState.currentUser?.id === message.author_id, 'received': globalState.currentUser?.id !== message.author_id}" :key="index">
             <div v-if="index === 0 || (globalState.chatMessages.has(selectedChannel._id) && globalState.chatMessages.get(selectedChannel._id)[index - 1].author_id !== message.author_id)">
               <span>{{ selectedChannelUserMap.get(message.author_id) || message.author_id }}</span>
@@ -219,6 +270,11 @@
     min-width: 60vw;
     display: flex;
     flex-direction: column;
+  }
+
+  .chat-area button {
+    margin-top: 10px;
+    margin-bottom: 10px;
   }
 
   .messages-area {
