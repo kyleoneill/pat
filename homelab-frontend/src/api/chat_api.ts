@@ -9,20 +9,28 @@ export async function connectChat(token: String) {
   socket.onmessage = (event) => {
     const websocketResponse = JSON.parse(event.data);
     if (websocketResponse.type === WebsocketResponseType.SendChatMessage) {
+      // We got a chat message from the server
       const chatMessage: ChatMessage = websocketResponse.data;
+      // If the chatMessages map doesn't have this channel, make an entry for it
       if (!globalState.chatMessages.has(chatMessage.channel_id)) {
         globalState.chatMessages.set(chatMessage.channel_id, []);
       }
       globalState.chatMessages.get(chatMessage.channel_id)?.push(chatMessage);
     }
     else if (websocketResponse.type === WebsocketResponseType.SendChatState) {
+      // The server sent an array of chat messages to give us a chat state
       const chatMessages: Array<ChatMessage> = websocketResponse.data;
+      let channel_id: String = "";
       chatMessages.forEach(message => {
         if (!globalState.chatMessages.has(message.channel_id)) {
           globalState.chatMessages.set(message.channel_id, []);
         }
         globalState.chatMessages.get(message.channel_id)?.push(message);
+        channel_id = message.channel_id;
       });
+      if (channel_id !== "") {
+        globalState.chatMessages.get(channel_id)?.sort((a, b) => a.atomic_id - b.atomic_id);
+      }
     }
     else if (websocketResponse.type === WebsocketResponseType.MessageCreated) {
       // TODO: This can't yet actually accomplish what it should (giving the user feedback on message creation)
@@ -52,6 +60,10 @@ export async function createChatChannel(channelData: CreateChatChannelData) {
 
 export async function listChatChannels(channelListParams?: ListChatChannelsParams) {
   return await axios.get("/chat/channels", {params: channelListParams});
+}
+
+export async function getChatChannel(channelId: String) {
+  return await axios.get(`/chat/channels/${channelId}`)
 }
 
 export async function chatChannelSubscribe(subscribeData: ChatChannelSubscribeData) {

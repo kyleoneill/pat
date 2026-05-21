@@ -143,18 +143,18 @@ mod chat_testing {
             Err((status_code, _msg)) => assert_eq!(status_code, StatusCode::NOT_FOUND, "Getting a channel by a non-existent ID should 404"),
         };
 
-        // Get a chat channel
-        let get_channel = get_channel_by_id(client, addr, token.as_str(), first_channel._id.as_str())
-            .await
-            .expect("Failed to get a chat channel by ID");
-        assert_eq!(get_channel._id.as_str(), first_channel._id.as_str());
-
         // Subscribe to a channel
         let subscribed_channel = subscribe_to_channel(client, addr, token.as_str(), third_channel._id.as_str())
             .await
             .expect("Failed to subscribe to another users chat channel");
-        println!("{:?}", subscribed_channel.subscribers);
         assert!(subscribed_channel.subscribers.contains(&user.clone().into()));
+
+        // Get a chat channel, verify that the subscriber list looks correct
+        let get_channel = get_channel_by_id(client, addr, token.as_str(), first_channel._id.as_str())
+            .await
+            .expect("Failed to get a chat channel by ID");
+        assert_eq!(get_channel._id.as_str(), first_channel._id.as_str());
+        assert!(get_channel.subscribers.contains(&user.clone().into()));
 
         // Try to subscribe to a channel the user is already subscribed to
         match subscribe_to_channel(client, addr, token.as_str(), first_channel._id.as_str()).await {
