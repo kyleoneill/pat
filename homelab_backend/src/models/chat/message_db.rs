@@ -60,7 +60,7 @@ async fn execute_chat_message_transaction(
     let filter_doc = doc! {"_id": Bson::ObjectId(channel_id)};
     let channel = match channel_collection.find_one(filter_doc).session(&mut *session).await? {
         Some(channel) => channel,
-        None => return Err(MongoError::custom("Failed to find a chat channel with the given ID")),
+        None => return Err(MongoError::custom("Failed to find a chat channel with the given ID".to_string())),
     };
 
     // Create a message
@@ -75,7 +75,7 @@ async fn execute_chat_message_transaction(
     let message_id = insert_result
         .inserted_id
         .as_object_id()
-        .ok_or(MongoError::custom("Failed to parse an insertion ID to ObjectID"))?;
+        .ok_or(MongoError::custom("Failed to parse an insertion ID to ObjectID".to_string()))?;
     channel_collection
         .update_one(channel_filter_doc, channel_update)
         .session(&mut *session)
@@ -85,7 +85,7 @@ async fn execute_chat_message_transaction(
         // Emergency safety valve to stop an infinite hang if mongo behaves strangely
         loop_counter += 1;
         if loop_counter > 500 {
-            return Err(MongoError::custom("Exceeded retries"));
+            return Err(MongoError::custom("Exceeded retries".to_string()));
         }
         let result = session.commit_transaction().await;
         if let Err(error) = result {

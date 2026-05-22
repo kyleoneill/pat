@@ -4,65 +4,44 @@ use crate::models::chat::{
     packet::{WebSocketError, WebSocketRequest, WebSocketResponse},
     validation::CreateChannelSchema,
 };
-use crate::testing::helpers::{get_request, post_request, put_request};
-use axum::body::Body;
+use crate::testing::{
+    helpers::{get_request, post_request, put_request},
+    TestHelper,
+};
 use axum::http::StatusCode;
 use futures::{SinkExt, StreamExt};
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
 use serde_json::json;
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 use tokio::{net::TcpStream, time::timeout};
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 
 pub async fn create_chat_channel(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
+    test_helper: &TestHelper,
     token: &str,
     chat_channel: &CreateChannelSchema,
 ) -> Result<ReturnChannel, (StatusCode, String)> {
     let data = json!(chat_channel);
-    post_request(client, "/chat/channels", data, Some(token), addr).await
+    post_request(test_helper, "/chat/channels", data, Some(token)).await
 }
 
-pub async fn subscribe_to_channel(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
-    token: &str,
-    channel_id: &str,
-) -> Result<ReturnChannel, (StatusCode, String)> {
+pub async fn subscribe_to_channel(test_helper: &TestHelper, token: &str, channel_id: &str) -> Result<ReturnChannel, (StatusCode, String)> {
     let data = json!({"channel_id": channel_id});
-    put_request(client, "/chat/channels/subscribe", data, token, addr).await
+    put_request(test_helper, "/chat/channels/subscribe", data, token).await
 }
 
-pub async fn unsubscribe_from_channel(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
-    token: &str,
-    channel_id: &str,
-) -> Result<ReturnChannel, (StatusCode, String)> {
+pub async fn unsubscribe_from_channel(test_helper: &TestHelper, token: &str, channel_id: &str) -> Result<ReturnChannel, (StatusCode, String)> {
     let data = json!({"channel_id": channel_id});
-    put_request(client, "/chat/channels/unsubscribe", data, token, addr).await
+    put_request(test_helper, "/chat/channels/unsubscribe", data, token).await
 }
 
-pub async fn list_channels(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
-    token: &str,
-    query_params: &str,
-) -> Result<Vec<ReturnChannel>, (StatusCode, String)> {
+pub async fn list_channels(test_helper: &TestHelper, token: &str, query_params: &str) -> Result<Vec<ReturnChannel>, (StatusCode, String)> {
     let path = format!("/chat/channels{query_params}");
-    get_request(client, path.as_str(), token, addr).await
+    get_request(test_helper, path.as_str(), token).await
 }
 
-pub async fn get_channel_by_id(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
-    token: &str,
-    channel_id: &str,
-) -> Result<ReturnChannel, (StatusCode, String)> {
+pub async fn get_channel_by_id(test_helper: &TestHelper, token: &str, channel_id: &str) -> Result<ReturnChannel, (StatusCode, String)> {
     let path = format!("/chat/channels/{channel_id}");
-    get_request(client, path.as_str(), token, addr).await
+    get_request(test_helper, path.as_str(), token).await
 }
 
 pub async fn receive_chat_message(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> Result<ChatMessage, WebSocketError> {

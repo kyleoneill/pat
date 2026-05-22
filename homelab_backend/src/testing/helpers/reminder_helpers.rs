@@ -1,57 +1,39 @@
 use crate::models::reminder::{validation::UpdateReminderSchema, Category, Priority, Reminder};
-use crate::testing::helpers::{delete_request, get_request, post_request, put_request};
-use axum::body::Body;
+use crate::testing::{
+    helpers::{delete_request, get_request, post_request, put_request},
+    TestHelper,
+};
 use axum::http::StatusCode;
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
 use serde_json::json;
-use std::net::SocketAddr;
 
-pub async fn create_category(
-    client: &Client<HttpConnector, Body>,
-    token: &str,
-    slug: &str,
-    name: &str,
-    addr: &SocketAddr,
-) -> Result<Category, (StatusCode, String)> {
+pub async fn create_category(test_helper: &TestHelper, token: &str, slug: &str, name: &str) -> Result<Category, (StatusCode, String)> {
     let data = json!({"slug": slug, "name": name});
-    post_request(client, "/reminders/category", data, Some(token), addr).await
+    post_request(test_helper, "/reminders/category", data, Some(token)).await
 }
 
-pub async fn get_categories(client: &Client<HttpConnector, Body>, token: &str, addr: &SocketAddr) -> Result<Vec<Category>, (StatusCode, String)> {
-    get_request(client, "/reminders/category", token, addr).await
+pub async fn get_categories(test_helper: &TestHelper, token: &str) -> Result<Vec<Category>, (StatusCode, String)> {
+    get_request(test_helper, "/reminders/category", token).await
 }
 
-pub async fn delete_category_by_id(
-    client: &Client<HttpConnector, Body>,
-    token: &str,
-    addr: &SocketAddr,
-    category_id: String,
-) -> Result<(), (StatusCode, String)> {
+pub async fn delete_category_by_id(test_helper: &TestHelper, token: &str, category_id: String) -> Result<(), (StatusCode, String)> {
     let path = format!("/reminders/category/{category_id}");
-    delete_request(client, path.as_str(), token, addr).await
+    delete_request(test_helper, path.as_str(), token).await
 }
 
 #[allow(clippy::too_many_arguments)]
 pub async fn create_reminder(
-    client: &Client<HttpConnector, Body>,
+    test_helper: &TestHelper,
     token: &str,
     name: &str,
     description: &str,
     categories: Vec<String>,
     priority: Priority,
-    addr: &SocketAddr,
 ) -> Result<Reminder, (StatusCode, String)> {
     let data = json!({"name": name, "description": description, "categories": categories, "priority": priority});
-    post_request(client, "/reminders", data, Some(token), addr).await
+    post_request(test_helper, "/reminders", data, Some(token)).await
 }
 
-pub async fn list_reminders(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
-    token: &str,
-    categories: Option<Vec<String>>,
-) -> Result<Vec<Reminder>, (StatusCode, String)> {
+pub async fn list_reminders(test_helper: &TestHelper, token: &str, categories: Option<Vec<String>>) -> Result<Vec<Reminder>, (StatusCode, String)> {
     let built_uri = match categories {
         Some(filter_categories) => {
             let params = super::list_to_query_params("categories", filter_categories);
@@ -59,27 +41,21 @@ pub async fn list_reminders(
         }
         None => "/reminders".to_string(),
     };
-    get_request(client, built_uri.as_str(), token, addr).await
+    get_request(test_helper, built_uri.as_str(), token).await
 }
 
 pub async fn update_reminder_helper(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
+    test_helper: &TestHelper,
     token: &str,
     reminder_id: String,
     reminder_updates: UpdateReminderSchema,
 ) -> Result<Reminder, (StatusCode, String)> {
     let path = format!("/reminders/{reminder_id}");
     let data = json!(reminder_updates);
-    put_request(client, path.as_str(), data, token, addr).await
+    put_request(test_helper, path.as_str(), data, token).await
 }
 
-pub async fn delete_reminder_helper(
-    client: &Client<HttpConnector, Body>,
-    addr: &SocketAddr,
-    token: &str,
-    reminder_id: String,
-) -> Result<(), (StatusCode, String)> {
+pub async fn delete_reminder_helper(test_helper: &TestHelper, token: &str, reminder_id: String) -> Result<(), (StatusCode, String)> {
     let path = format!("/reminders/{reminder_id}");
-    delete_request(client, path.as_str(), token, addr).await
+    delete_request(test_helper, path.as_str(), token).await
 }

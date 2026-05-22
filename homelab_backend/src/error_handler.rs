@@ -1,4 +1,5 @@
 use mongodb::error::{ErrorKind, WriteFailure};
+use std::sync::Arc;
 
 use crate::api::return_data::ReturnData;
 
@@ -10,6 +11,7 @@ pub enum DbError {
     EmptyDbExpression(&'static str, String),
     BadId,
     AuthFailure,
+    CustomMongoFailure(String),
     UnhandledException(String),
 }
 
@@ -30,6 +32,14 @@ impl From<mongodb::error::Error> for DbError {
                 },
                 _ => DbError::UnhandledException("Unhandled error while writing data".to_owned()),
             },
+            ErrorKind::Custom(custom_message) => {
+                if let Ok(custom_error_message) = custom_message.downcast::<String>() {
+                    if let Some(owned_error_message) = Arc::into_inner(custom_error_message) {
+                        return DbError::CustomMongoFailure(owned_error_message);
+                    }
+                }
+                DbError::UnhandledException("Unhandled failure while resolving custom MongoDB error".to_string())
+            }
             _ => DbError::UnhandledException("Unhandled failure".to_owned()),
         }
     }
@@ -48,6 +58,7 @@ impl<T> From<DbError> for ReturnData<T> {
             }
             DbError::BadId => ReturnData::not_found("The provided ID was not valid".to_owned()),
             DbError::AuthFailure => ReturnData::unauthorized("Auth failure while reading database".to_owned()),
+            DbError::CustomMongoFailure(custom_message) => ReturnData::bad_request(custom_message),
             DbError::UnhandledException(error_while) => {
                 ReturnData::internal_error(format!("Unhandled exception when making a database request: {error_while}"))
             }
