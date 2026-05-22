@@ -24,3 +24,18 @@ Before any PR is made, make sure the following:
 cargo fmt
 cargo clippy
 ```
+
+## Setup
+The backend requires a `.env` in order to run, which should look like:
+```
+# This is the mongodb connection string
+CONNECTION_STRING="mongodb://localhost:27017"
+APP_SECRET="app_secret_string"
+JWT_SECRET="jwt_secret"
+JWT_EXPIRES_IN="jwt_expires_in"
+JWT_MAX_AGE=604800
+ADMIN_PASSWORD_HASH="admin_password_hash"
+ADMIN_SALT="admin_salt"
+```
+The admin password hash and salt are used to automatically create an admin account when the app starts, to ensure
+one exists for debugging. This will only occur if the application is running as debug and not release.
