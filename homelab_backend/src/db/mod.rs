@@ -13,7 +13,7 @@ pub mod db_setup;
 pub fn str_to_object_id(object_str: &str) -> Result<ObjectId, Error> {
     match ObjectId::parse_str(object_str) {
         Ok(object_id) => Ok(object_id),
-        Err(_) => Err(Error::custom("Failed to construct ObjectId")),
+        Err(_) => Err(Error::custom("Failed to construct ObjectId".to_string())),
     }
 }
 

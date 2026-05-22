@@ -7,22 +7,14 @@ mod log_testing;
 mod reminder_testing;
 mod user_testing;
 
-use crate::{
-    app::generate_app,
-    db::{db_setup, MongoModel},
-    models::{
-        chat::{chat_channel::ChatChannel, message::ChatMessage},
-        games::ConnectionGame,
-        log::Log,
-        reminder::{Category, Reminder},
-        user::User,
-    },
-    tasks::task_manager::TaskManager,
-};
+use crate::{app::generate_app, db::db_setup, tasks::task_manager::TaskManager};
 use axum::body::Body;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
-use mongodb::{bson::doc, Collection, Database};
+use mongodb::{
+    bson::{doc, Document},
+    Collection, Database,
+};
 use serde::Serialize;
 use std::{
     net::SocketAddr,
@@ -53,7 +45,7 @@ impl TestHelper {
                 .await
                 .unwrap()
         });
-        let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
         let helper = Self {
             client,
             address,
@@ -65,28 +57,17 @@ impl TestHelper {
     }
 
     pub async fn wipe_database(&self) {
-        // TODO: This is not sustainable, what if 100 collections are added?
-
-        let user_collection: Collection<User> = self.database.collection(User::collection_name());
-        let _res = user_collection.delete_many(doc! {}).await;
-
-        let log_collection: Collection<Log> = self.database.collection(Log::collection_name());
-        let _res = log_collection.delete_many(doc! {}).await;
-
-        let categories_collection: Collection<Category> = self.database.collection(Category::collection_name());
-        let _res = categories_collection.delete_many(doc! {}).await;
-
-        let reminders_collection: Collection<Reminder> = self.database.collection(Reminder::collection_name());
-        let _res = reminders_collection.delete_many(doc! {}).await;
-
-        let games_collection: Collection<ConnectionGame> = self.database.collection(ConnectionGame::collection_name());
-        let _res = games_collection.delete_many(doc! {}).await;
-
-        let chat_channels_collection: Collection<ChatChannel> = self.database.collection(ChatChannel::collection_name());
-        let _res = chat_channels_collection.delete_many(doc! {}).await;
-
-        let chat_messages_collection: Collection<ChatMessage> = self.database.collection(ChatMessage::collection_name());
-        let _res = chat_messages_collection.delete_many(doc! {}).await;
+        // Get all collections in the test database and wipe each of them
+        let collections: Vec<String> = self
+            .database
+            .list_collection_names()
+            .await
+            .expect("Failed to get collection data while wiping database during test setup");
+        for collection_name in collections {
+            let collection: Collection<Document> = self.database.collection(collection_name.as_str());
+            // An empty filter doc will grab all documents in the collection
+            let _res = collection.delete_many(doc! {}).await;
+        }
     }
 }
 

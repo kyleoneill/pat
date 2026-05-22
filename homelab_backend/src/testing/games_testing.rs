@@ -1,17 +1,18 @@
 #[cfg(test)]
 mod games_testing {
     use crate::models::games::validation::{CreateConnectionCategorySchema, CreateConnectionGameSchema};
-
-    use crate::testing::helpers::games_helpers::{create_connections_game, get_game_to_play, list_connections_games, try_connections_solution};
-    use crate::testing::helpers::user_helpers::{create_user, get_user_me};
-    use crate::testing::TestHelper;
+    use crate::testing::{
+        helpers::{
+            games_helpers::{create_connections_game, get_game_to_play, list_connections_games, try_connections_solution},
+            user_helpers::{create_user, get_user_me},
+        },
+        TestHelper,
+    };
     use hyper::StatusCode;
 
     #[tokio::test]
     async fn connections_crud() {
         let helper = TestHelper::init().await;
-        let client = &helper.client;
-        let addr = &helper.address;
 
         let username = "foo";
         let password = "foo";
@@ -20,12 +21,12 @@ mod games_testing {
         let password_two = "second";
 
         // Create users
-        let token = create_user(client, username, password, addr).await.unwrap();
-        let second_token = create_user(client, username_two, password_two, addr).await.unwrap();
+        let token = create_user(&helper, username, password).await.unwrap();
+        let second_token = create_user(&helper, username_two, password_two).await.unwrap();
 
         // Get our user so we have their id
-        let user = get_user_me(client, token.as_str(), addr).await.unwrap();
-        let user_two = get_user_me(client, second_token.as_str(), addr).await.unwrap();
+        let user = get_user_me(&helper, token.as_str()).await.unwrap();
+        let user_two = get_user_me(&helper, second_token.as_str()).await.unwrap();
 
         let connection_categories = [
             CreateConnectionCategorySchema {
@@ -51,14 +52,14 @@ mod games_testing {
             connection_categories: connection_categories.clone(),
             puzzle_name: "Test Puzzle".to_string(),
         };
-        let connection_game = create_connections_game(client, addr, token.as_str(), &data)
+        let connection_game = create_connections_game(&helper, token.as_str(), &data)
             .await
             .expect("Failed to create a connections game");
         assert_eq!(connection_game.author_id, user.id);
         assert_eq!(connection_game.puzzle_name, "Test Puzzle");
 
         // Try to create a connections game with a duplicate slug
-        match create_connections_game(client, addr, token.as_str(), &data).await {
+        match create_connections_game(&helper, token.as_str(), &data).await {
             Ok(_) => panic!("Creating a connections game with a duplicate slug should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -72,7 +73,7 @@ mod games_testing {
             connection_categories: connection_categories.clone(),
             puzzle_name: "Second Test Puzzle".to_string(),
         };
-        let _second_connections_game = create_connections_game(client, addr, token.as_str(), &second_data)
+        let _second_connections_game = create_connections_game(&helper, token.as_str(), &second_data)
             .await
             .expect("Failed to create a connections game");
 
@@ -81,12 +82,12 @@ mod games_testing {
             connection_categories: connection_categories.clone(),
             puzzle_name: "Other User Test Puzzle".to_string(),
         };
-        let other_user_connections_game = create_connections_game(client, addr, second_token.as_str(), &other_user_data)
+        let other_user_connections_game = create_connections_game(&helper, second_token.as_str(), &other_user_data)
             .await
             .expect("Failed to create a connections game");
 
         // List "my" connections games for the first user, there should be two
-        let my_connections_games = list_connections_games(client, addr, token.as_str(), true)
+        let my_connections_games = list_connections_games(&helper, token.as_str(), true)
             .await
             .expect("Failed to get connections games for 'me'");
         assert_eq!(my_connections_games.len(), 2);
@@ -94,14 +95,14 @@ mod games_testing {
         assert_eq!(my_connections_games[1].author_id, user.id);
 
         // List all connections games for other users as the first user, there should be one
-        let other_connections_games = list_connections_games(client, addr, token.as_str(), false)
+        let other_connections_games = list_connections_games(&helper, token.as_str(), false)
             .await
             .expect("Failed to get connections games for other users");
         assert_eq!(other_connections_games.len(), 1);
         assert_eq!(other_connections_games[0].author_id, user_two.id);
 
         // Try to get a game to play that doesn't exist
-        match get_game_to_play(client, addr, token.as_str(), "i-dont-exist").await {
+        match get_game_to_play(&helper, token.as_str(), "i-dont-exist").await {
             Ok(_) => panic!("Getting a connections game with a nonexistent slug should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -111,14 +112,14 @@ mod games_testing {
         }
 
         // Get a connections game to play, this should give us 16 scrambled words
-        let play_game = get_game_to_play(client, addr, token.as_str(), other_user_connections_game.slug.as_str())
+        let play_game = get_game_to_play(&helper, token.as_str(), other_user_connections_game.slug.as_str())
             .await
             .expect("Failed to get a connections game to play");
         assert_eq!(play_game.scrambled_clues.len(), 16);
 
         // Try to solve a row with an incorrect solution
         let bad_guess = ["wrong".to_string(), "wrong".to_string(), "wrong".to_string(), "wrong".to_string()];
-        let bad_guess_response = try_connections_solution(client, addr, token.as_str(), other_user_connections_game.slug.as_str(), bad_guess)
+        let bad_guess_response = try_connections_solution(&helper, token.as_str(), other_user_connections_game.slug.as_str(), bad_guess)
             .await
             .expect("Failed to attempt an incorrect guess for a connections game row");
         assert_eq!(bad_guess_response.row_name, None);
@@ -127,7 +128,7 @@ mod games_testing {
         // Solve a row with a correct solution
         let good_guess = connection_categories[0].category_clues.clone();
         let good_guess_category_name = connection_categories[0].category_name.clone();
-        let good_guess_response = try_connections_solution(client, addr, token.as_str(), other_user_connections_game.slug.as_str(), good_guess)
+        let good_guess_response = try_connections_solution(&helper, token.as_str(), other_user_connections_game.slug.as_str(), good_guess)
             .await
             .expect("Failed to attempt a correct guess for a connections game row");
         assert_eq!(good_guess_response.row_name, Some(good_guess_category_name));

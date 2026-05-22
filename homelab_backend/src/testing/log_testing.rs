@@ -1,8 +1,12 @@
 #[cfg(test)]
 mod log_testing {
-    use crate::testing::helpers::log_helpers::get_logs_for_user;
-    use crate::testing::helpers::user_helpers::{auth_user, create_user, get_user_me};
-    use crate::testing::TestHelper;
+    use crate::testing::{
+        helpers::{
+            log_helpers::get_logs_for_user,
+            user_helpers::{auth_user, create_user, get_user_me},
+        },
+        TestHelper,
+    };
 
     #[tokio::test]
     async fn log_generation() {
@@ -15,16 +19,12 @@ mod log_testing {
         let user_two_password = "two";
 
         // Create a user
-        create_user(&helper.client, user_one_username, user_one_password, &helper.address)
-            .await
-            .unwrap();
+        create_user(&helper, user_one_username, user_one_password).await.unwrap();
 
         // Generate logs with our user
-        let token = auth_user(&helper.client, user_one_username, user_one_password, &helper.address)
-            .await
-            .unwrap();
-        let user = get_user_me(&helper.client, token.as_str(), &helper.address).await.unwrap();
-        get_user_me(&helper.client, token.as_str(), &helper.address).await.unwrap();
+        let token = auth_user(&helper, user_one_username, user_one_password).await.unwrap();
+        let user = get_user_me(&helper, token.as_str()).await.unwrap();
+        get_user_me(&helper, token.as_str()).await.unwrap();
 
         // Run the log generation task manually rather than waiting for it
         {
@@ -37,7 +37,7 @@ mod log_testing {
         }
 
         // Get logs
-        let logs = get_logs_for_user(&helper.client, token.as_str(), &helper.address).await.unwrap();
+        let logs = get_logs_for_user(&helper, token.as_str()).await.unwrap();
 
         // Verify that the logs look correct
         assert_eq!(logs.len(), 2);
@@ -46,15 +46,11 @@ mod log_testing {
         assert_eq!(logs[0].user_id, user.id);
 
         // Create a second user
-        create_user(&helper.client, user_two_username, user_two_password, &helper.address)
-            .await
-            .unwrap();
+        create_user(&helper, user_two_username, user_two_password).await.unwrap();
 
         // Generate logs with the second user
-        let token_two = auth_user(&helper.client, user_two_username, user_two_password, &helper.address)
-            .await
-            .unwrap();
-        let user_two = get_user_me(&helper.client, token_two.as_str(), &helper.address).await.unwrap();
+        let token_two = auth_user(&helper, user_two_username, user_two_password).await.unwrap();
+        let user_two = get_user_me(&helper, token_two.as_str()).await.unwrap();
 
         // Run the log generation task manually rather than waiting for it
         {
@@ -67,7 +63,7 @@ mod log_testing {
         }
 
         // Get logs for the second user
-        let logs = get_logs_for_user(&helper.client, token_two.as_str(), &helper.address).await.unwrap();
+        let logs = get_logs_for_user(&helper, token_two.as_str()).await.unwrap();
 
         // Verify that the logs look correct
         assert_eq!(logs.len(), 1);

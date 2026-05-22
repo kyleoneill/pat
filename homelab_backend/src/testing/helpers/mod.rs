@@ -1,14 +1,11 @@
-use crate::testing::json_bytes;
+use crate::testing::{json_bytes, TestHelper};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use hyper::body::Bytes;
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::client::legacy::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{value::Value, Map};
 use std::fmt;
-use std::net::SocketAddr;
 
 pub mod chat_helpers;
 pub mod games_helpers;
@@ -28,19 +25,14 @@ where
     res
 }
 
-pub async fn post_request<T, U>(
-    client: &Client<HttpConnector, Body>,
-    path: &str,
-    data: T,
-    token: Option<&str>,
-    addr: &SocketAddr,
-) -> Result<U, (StatusCode, String)>
+pub async fn post_request<T, U>(test_helper: &TestHelper, path: &str, data: T, token: Option<&str>) -> Result<U, (StatusCode, String)>
 where
     T: Serialize,
     U: for<'a> Deserialize<'a>,
 {
+    let address = &test_helper.address;
     let req_builder = Request::builder()
-        .uri(format!("http://{addr}/api{path}"))
+        .uri(format!("http://{address}/api{path}"))
         .method("POST")
         .header("Host", "localhost")
         .header("Content-Type", "application/json");
@@ -51,7 +43,7 @@ where
     let req = req_builder
         .body(Body::from(json_bytes(data)))
         .expect("Failed to construct a POST request");
-    let res = client.request(req).await.expect("Failed to make a POST request");
+    let res = test_helper.client.request(req).await.expect("Failed to make a POST request");
     match res.status() {
         StatusCode::CREATED => {
             let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -66,19 +58,20 @@ where
     }
 }
 
-pub async fn get_request<U>(client: &Client<HttpConnector, Body>, path: &str, token: &str, addr: &SocketAddr) -> Result<U, (StatusCode, String)>
+pub async fn get_request<U>(test_helper: &TestHelper, path: &str, token: &str) -> Result<U, (StatusCode, String)>
 where
     U: for<'a> Deserialize<'a>,
 {
+    let address = &test_helper.address;
     let req = Request::builder()
-        .uri(format!("http://{addr}/api{path}"))
+        .uri(format!("http://{address}/api{path}"))
         .method("GET")
         .header("Host", "localhost")
         .header("Content-Type", "application/json")
         .header("authorization", token)
         .body(Body::empty())
         .expect("Failed to construct a GET request");
-    let res = client.request(req).await.expect("Failed to make a GET request");
+    let res = test_helper.client.request(req).await.expect("Failed to make a GET request");
     match res.status() {
         StatusCode::OK => {
             let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -93,26 +86,21 @@ where
     }
 }
 
-pub async fn put_request<T, U>(
-    client: &Client<HttpConnector, Body>,
-    path: &str,
-    data: T,
-    token: &str,
-    addr: &SocketAddr,
-) -> Result<U, (StatusCode, String)>
+pub async fn put_request<T, U>(test_helper: &TestHelper, path: &str, data: T, token: &str) -> Result<U, (StatusCode, String)>
 where
     T: Serialize,
     U: for<'a> Deserialize<'a>,
 {
+    let address = &test_helper.address;
     let req = Request::builder()
-        .uri(format!("http://{addr}/api{path}"))
+        .uri(format!("http://{address}/api{path}"))
         .method("PUT")
         .header("Host", "localhost")
         .header("Content-Type", "application/json")
         .header("authorization", token)
         .body(Body::from(json_bytes(data)))
         .expect("Failed to construct a PUT request");
-    let res = client.request(req).await.expect("Failed to make a PUT request");
+    let res = test_helper.client.request(req).await.expect("Failed to make a PUT request");
     match res.status() {
         StatusCode::OK => {
             let body = res.into_body().collect().await.unwrap().to_bytes();
@@ -127,16 +115,17 @@ where
     }
 }
 
-pub async fn delete_request(client: &Client<HttpConnector, Body>, path: &str, token: &str, addr: &SocketAddr) -> Result<(), (StatusCode, String)> {
+pub async fn delete_request(test_helper: &TestHelper, path: &str, token: &str) -> Result<(), (StatusCode, String)> {
+    let address = &test_helper.address;
     let req = Request::builder()
-        .uri(format!("http://{addr}/api{path}"))
+        .uri(format!("http://{address}/api{path}"))
         .method("DELETE")
         .header("Host", "localhost")
         .header("Content-Type", "application/json")
         .header("authorization", token)
         .body(Body::empty())
         .expect("Failed to construct a DELETE request");
-    let res = client.request(req).await.expect("Failed to make a DELETE request");
+    let res = test_helper.client.request(req).await.expect("Failed to make a DELETE request");
     match res.status() {
         StatusCode::OK => Ok(()),
         _ => {

@@ -5,7 +5,6 @@ mod chat_testing {
         TestHelper, FAKE_MONGO_ID,
     };
     use hyper::StatusCode;
-    use std::net::SocketAddr;
 
     use crate::models::chat::{
         chat_channel::{ChannelType, ReturnChannel},
@@ -18,9 +17,6 @@ mod chat_testing {
         subscribe_to_channel, unsubscribe_from_channel,
     };
 
-    use axum::body::Body;
-    use hyper_util::client::legacy::{connect::HttpConnector, Client};
-
     struct ChatHelper {
         users: Vec<ReturnUser>,
         tokens: Vec<String>,
@@ -28,7 +24,7 @@ mod chat_testing {
     }
 
     impl ChatHelper {
-        pub async fn setup_chat(client: &Client<HttpConnector, Body>, addr: &SocketAddr, user_and_channel_count: usize) -> Self {
+        pub async fn setup_chat(test_helper: &TestHelper, user_and_channel_count: usize) -> Self {
             let mut users: Vec<ReturnUser> = Vec::new();
             let mut tokens: Vec<String> = Vec::new();
             let mut channels: Vec<ReturnChannel> = Vec::new();
@@ -39,8 +35,8 @@ mod chat_testing {
                 // TODO: Client and addr are being passed all over the place, and here it's causing a needless import. Should
                 //       bundle this into an actual testing struct
                 // Create a user, get the user and a token for the user
-                let token = create_user(client, username.as_str(), password.as_str(), addr).await.unwrap();
-                let user = get_user_me(client, token.as_str(), addr).await.unwrap();
+                let token = create_user(test_helper, username.as_str(), password.as_str()).await.unwrap();
+                let user = get_user_me(test_helper, token.as_str()).await.unwrap();
 
                 // Create a channel for the user
                 let data = CreateChannelSchema {
@@ -48,7 +44,7 @@ mod chat_testing {
                     channel_type: 0,
                     slug: format!("channel-{}", n),
                 };
-                let channel = create_chat_channel(client, addr, token.as_str(), &data)
+                let channel = create_chat_channel(test_helper, token.as_str(), &data)
                     .await
                     .expect("Failed to create a chat channel");
 
@@ -63,8 +59,6 @@ mod chat_testing {
     #[tokio::test]
     async fn chat_channels_crud() {
         let helper = TestHelper::init().await;
-        let client = &helper.client;
-        let addr = &helper.address;
 
         let username = "foo";
         let password = "foo";
@@ -73,12 +67,12 @@ mod chat_testing {
         let password_two = "second";
 
         // Create users
-        let token = create_user(client, username, password, addr).await.unwrap();
-        let second_token = create_user(client, username_two, password_two, addr).await.unwrap();
+        let token = create_user(&helper, username, password).await.unwrap();
+        let second_token = create_user(&helper, username_two, password_two).await.unwrap();
 
         // Get our user so we have their id
-        let user = get_user_me(client, token.as_str(), addr).await.unwrap();
-        let user_two = get_user_me(client, second_token.as_str(), addr).await.unwrap();
+        let user = get_user_me(&helper, token.as_str()).await.unwrap();
+        let user_two = get_user_me(&helper, second_token.as_str()).await.unwrap();
 
         // Create a channel without a name
         let data = CreateChannelSchema {
@@ -86,7 +80,7 @@ mod chat_testing {
             channel_type: 0,
             slug: "test_channel".to_string(),
         };
-        let first_channel = create_chat_channel(client, addr, token.as_str(), &data)
+        let first_channel = create_chat_channel(&helper, token.as_str(), &data)
             .await
             .expect("Failed to create a chat channel");
         assert_eq!(first_channel.name, None);
@@ -103,14 +97,14 @@ mod chat_testing {
             channel_type: 1,
             slug: "second_channel".to_string(),
         };
-        let second_channel = create_chat_channel(client, addr, token.as_str(), &data_two)
+        let second_channel = create_chat_channel(&helper, token.as_str(), &data_two)
             .await
             .expect("Failed to create a chat channel with a name");
         assert_eq!(second_channel.name, Some("My Channel".to_string()));
         assert_eq!(second_channel.channel_type, ChannelType::Group);
 
         // Try to create a channel with a duplicate slug for a user, which should fail
-        match create_chat_channel(client, addr, token.as_str(), &data).await {
+        match create_chat_channel(&helper, token.as_str(), &data).await {
             Ok(_) => panic!("Creating a chat channel with a duplicate slug for a user should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -120,7 +114,7 @@ mod chat_testing {
         };
 
         // Create a channel with a duplicate slug, but for a new user which should be fine
-        let third_channel = create_chat_channel(client, addr, second_token.as_str(), &data)
+        let third_channel = create_chat_channel(&helper, second_token.as_str(), &data)
             .await
             .expect("Failed to create a chat channel");
         assert_eq!(third_channel.slug.as_str(), "test_channel");
@@ -128,7 +122,7 @@ mod chat_testing {
         assert_eq!(third_channel.owner_id, user_two.id.as_str());
 
         // Try to subscribe to a channel that doesn't exist
-        match subscribe_to_channel(client, addr, token.as_str(), token.as_str()).await {
+        match subscribe_to_channel(&helper, token.as_str(), token.as_str()).await {
             Ok(_) => panic!("Subscribing to a non-existent channel should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -138,26 +132,26 @@ mod chat_testing {
         };
 
         // Try to get a channel that does not exist
-        match get_channel_by_id(client, addr, token.as_str(), FAKE_MONGO_ID).await {
+        match get_channel_by_id(&helper, token.as_str(), FAKE_MONGO_ID).await {
             Ok(_) => panic!("Getting a channel by a non-existent ID should fail"),
             Err((status_code, _msg)) => assert_eq!(status_code, StatusCode::NOT_FOUND, "Getting a channel by a non-existent ID should 404"),
         };
 
         // Subscribe to a channel
-        let subscribed_channel = subscribe_to_channel(client, addr, token.as_str(), third_channel._id.as_str())
+        let subscribed_channel = subscribe_to_channel(&helper, token.as_str(), third_channel._id.as_str())
             .await
             .expect("Failed to subscribe to another users chat channel");
         assert!(subscribed_channel.subscribers.contains(&user.clone().into()));
 
         // Get a chat channel, verify that the subscriber list looks correct
-        let get_channel = get_channel_by_id(client, addr, token.as_str(), first_channel._id.as_str())
+        let get_channel = get_channel_by_id(&helper, token.as_str(), first_channel._id.as_str())
             .await
             .expect("Failed to get a chat channel by ID");
         assert_eq!(get_channel._id.as_str(), first_channel._id.as_str());
         assert!(get_channel.subscribers.contains(&user.clone().into()));
 
         // Try to subscribe to a channel the user is already subscribed to
-        match subscribe_to_channel(client, addr, token.as_str(), first_channel._id.as_str()).await {
+        match subscribe_to_channel(&helper, token.as_str(), first_channel._id.as_str()).await {
             Ok(_) => panic!("Subscribing to a channel already subscribed to should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -167,7 +161,7 @@ mod chat_testing {
         };
 
         // Try to unsubscribe from a channel that doesn't exist
-        match unsubscribe_from_channel(client, addr, token.as_str(), token.as_str()).await {
+        match unsubscribe_from_channel(&helper, token.as_str(), token.as_str()).await {
             Ok(_) => panic!("Unsubscribing from a non-existent channel should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -177,13 +171,13 @@ mod chat_testing {
         };
 
         // Unsubscribe from a channel
-        let unsubscribed_channel = unsubscribe_from_channel(client, addr, token.as_str(), third_channel._id.as_str())
+        let unsubscribed_channel = unsubscribe_from_channel(&helper, token.as_str(), third_channel._id.as_str())
             .await
             .expect("Failed to unsubscribe from another users chat channel");
         assert!(!unsubscribed_channel.subscribers.contains(&user.clone().into()));
 
         // Try to unsubscribe from a channel the user is not in
-        match unsubscribe_from_channel(client, addr, token.as_str(), third_channel._id.as_str()).await {
+        match unsubscribe_from_channel(&helper, token.as_str(), third_channel._id.as_str()).await {
             Ok(_) => panic!("Unsubscribing from a channel a user is not in should fail"),
             Err((status_code, _msg)) => assert_eq!(
                 status_code,
@@ -193,19 +187,19 @@ mod chat_testing {
         };
 
         // Try to unsubscribe from an owned channel, which should fail
-        match unsubscribe_from_channel(client, addr, token.as_str(), first_channel._id.as_str()).await {
+        match unsubscribe_from_channel(&helper, token.as_str(), first_channel._id.as_str()).await {
             Ok(_) => panic!("Unsubscribing from an owned channel should fail"),
             Err((status_code, _msg)) => assert_eq!(status_code, StatusCode::NOT_FOUND, "Unsubscribing from an owned channel should 404"),
         };
 
         // List all channels with no query params
-        let all_channels = list_channels(client, addr, token.as_str(), "")
+        let all_channels = list_channels(&helper, token.as_str(), "")
             .await
             .expect("Failed to list all chat channels");
         assert_eq!(all_channels.len(), 3);
 
         // List only my channels
-        let my_channels = list_channels(client, addr, token.as_str(), "?my_channels=true")
+        let my_channels = list_channels(&helper, token.as_str(), "?my_channels=true")
             .await
             .expect("Failed to list channels filtered to ones owned by the requester");
         assert_eq!(my_channels.len(), 2);
@@ -213,14 +207,14 @@ mod chat_testing {
         assert_eq!(my_channels[1].owner_id, user.id);
 
         // List only other channels
-        let other_channels = list_channels(client, addr, token.as_str(), "?my_channels=false")
+        let other_channels = list_channels(&helper, token.as_str(), "?my_channels=false")
             .await
             .expect("Failed to list channels owned by users other than the requester");
         assert_eq!(other_channels.len(), 1);
         assert_eq!(other_channels[0].owner_id, user_two.id);
 
         // List subscribed channels, include "my_channels" here as the user is currently only subscribed to their own channels
-        let subscribed = list_channels(client, addr, token.as_str(), "?subscribed=true&my_channels=true")
+        let subscribed = list_channels(&helper, token.as_str(), "?subscribed=true&my_channels=true")
             .await
             .expect("Failed to list channels the requester subscribes to");
         assert_eq!(subscribed.len(), 2);
@@ -228,7 +222,7 @@ mod chat_testing {
         assert!(subscribed[1].subscribers.contains(&user.clone().into()));
 
         // List unsubscribed channels
-        let unsubscribed = list_channels(client, addr, token.as_str(), "?subscribed=false")
+        let unsubscribed = list_channels(&helper, token.as_str(), "?subscribed=false")
             .await
             .expect("Failed to list channels the requester is not subscribed to");
         assert_eq!(unsubscribed.len(), 1);
@@ -241,10 +235,9 @@ mod chat_testing {
     #[tokio::test]
     async fn chat_messages_basic() {
         let helper = TestHelper::init().await;
-        let client = &helper.client;
         let addr = &helper.address;
 
-        let chat_helper = ChatHelper::setup_chat(client, addr, 2).await;
+        let chat_helper = ChatHelper::setup_chat(&helper, 2).await;
         let token = chat_helper.tokens[0].as_str();
         let second_token = chat_helper.tokens[1].as_str();
         let user_one_id = chat_helper.users[0].id.as_str();
@@ -253,7 +246,7 @@ mod chat_testing {
         let channel_two_id = chat_helper.channels[1]._id.as_str();
 
         // Subscribe to the first channel with the second user
-        subscribe_to_channel(client, addr, second_token, channel_one_id)
+        subscribe_to_channel(&helper, second_token, channel_one_id)
             .await
             .expect("Failed to subscribe to another users chat channel");
 
@@ -342,7 +335,7 @@ mod chat_testing {
         assert_eq!(user_one_message.atomic_id, 2);
 
         // Get the first channel, assert that its most recent message ID has been updated
-        let updated_first_channel = get_channel_by_id(client, addr, token, channel_one_id)
+        let updated_first_channel = get_channel_by_id(&helper, token, channel_one_id)
             .await
             .expect("Failed to get a chat channel by ID");
         assert_eq!(updated_first_channel.most_recent_message_id, 2);
@@ -387,17 +380,16 @@ mod chat_testing {
     #[tokio::test]
     async fn chat_state() {
         let helper = TestHelper::init().await;
-        let client = &helper.client;
         let addr = &helper.address;
 
-        let chat_helper = ChatHelper::setup_chat(client, addr, 2).await;
+        let chat_helper = ChatHelper::setup_chat(&helper, 2).await;
         let token = chat_helper.tokens[0].as_str();
         let second_token = chat_helper.tokens[1].as_str();
         let channel_one_id = chat_helper.channels[0]._id.as_str();
         let channel_two_id = chat_helper.channels[1]._id.as_str();
 
         // Subscribe to the first channel with the second user
-        subscribe_to_channel(client, addr, second_token, channel_one_id)
+        subscribe_to_channel(&helper, second_token, channel_one_id)
             .await
             .expect("Failed to subscribe to another users chat channel");
 
@@ -514,17 +506,16 @@ mod chat_testing {
         // Rapidly generates 1000 messages, make sure that they are received in the correct order
         // randomize author in the generation, make sure that the broadcasts are received correctly?
         let helper = TestHelper::init().await;
-        let client = &helper.client;
         let addr = &helper.address;
 
-        let chat_helper = ChatHelper::setup_chat(client, addr, 2).await;
+        let chat_helper = ChatHelper::setup_chat(&helper, 2).await;
         let token = chat_helper.tokens[0].as_str();
         let second_token = chat_helper.tokens[1].as_str();
         let user_two_id = chat_helper.users[1].id.as_str();
         let channel_one_id = chat_helper.channels[0]._id.as_str();
 
         // Subscribe to the first channel with the second user
-        subscribe_to_channel(client, addr, second_token, channel_one_id)
+        subscribe_to_channel(&helper, second_token, channel_one_id)
             .await
             .expect("Failed to subscribe to another users chat channel");
 
