@@ -48,7 +48,7 @@ impl From<mongodb::error::Error> for DbError {
 impl<T> From<DbError> for ReturnData<T> {
     fn from(value: DbError) -> Self {
         match value {
-            DbError::AlreadyExists => ReturnData::bad_request("Tried to create a resource which violated a unique constraint".to_string()),
+            DbError::AlreadyExists => ReturnData::bad_request("Tried to create a resource which violated a unique constraint"),
             DbError::NotFound(resource_type) => ReturnData::not_found(format!("{resource_type} not found")),
             DbError::RelationshipViolation(resource_type, identifier) => ReturnData::bad_request(format!(
                 "The request violates a relationship constraint on {resource_type} with identifier {identifier}"
@@ -56,8 +56,8 @@ impl<T> From<DbError> for ReturnData<T> {
             DbError::EmptyDbExpression(resource_type, operation) => {
                 ReturnData::bad_request(format!("Received no data while {operation} {resource_type}, resulting in a no-op"))
             }
-            DbError::BadId => ReturnData::not_found("The provided ID was not valid".to_owned()),
-            DbError::AuthFailure => ReturnData::unauthorized("Auth failure while reading database".to_owned()),
+            DbError::BadId => ReturnData::not_found("The provided ID was not valid"),
+            DbError::AuthFailure => ReturnData::unauthorized("Auth failure while reading database"),
             DbError::CustomMongoFailure(custom_message) => ReturnData::bad_request(custom_message),
             DbError::UnhandledException(error_while) => {
                 ReturnData::internal_error(format!("Unhandled exception when making a database request: {error_while}"))
