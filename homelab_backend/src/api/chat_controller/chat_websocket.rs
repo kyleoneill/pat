@@ -32,6 +32,7 @@ pub(super) async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: 
 
     // Spawn a task to send messages to the socket
     let write_task = tokio::spawn(write_messages(rx, sender));
+
     /*
     Educational note for me as to what is actually happening right here:
     When `handle_socked` is called, a task is spawned to run the function (since it is async).
@@ -60,62 +61,60 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
         // a simple chat app. As is currently written, a non-fatal-error will cause the `while let` to fail,
         // ending the while loop and then the async block
 
-        // TODO: Should I match here instead of using an if_let to handle binary data or a Close?
+        // Should I match here instead of using an if_let to handle binary data or a Close? Need
+        // to see what happens if I include Ping/Pong messages here on a match, as axum as-is
+        // will automatically handle them for me
         if let Message::Text(text) = msg {
             match serde_json::from_str::<WebSocketRequest>(text.as_str()) {
+                // We got a request to create a message
                 Ok(WebSocketRequest::CreateMessage(msg_to_create)) => {
-                    // Can this be made more readable
-
-                    // Verify that the message is being sent to a valid channel that the sender is in
-                    let channel_id = msg_to_create.channel_id.as_str();
-                    let maybe_response: Option<WebSocketResponse> = match get_chat_channel_by_id(&app_state.db, channel_id).await {
-                        Ok(channel) => {
-                            // Verify that the current user is a subscriber of the channel
-                            if channel.subscribers.contains(&user_id) {
-                                // Create a db entry for this message
-                                match insert_chat_message(&app_state.db, msg_to_create, user_id.as_str()).await {
-                                    Ok(chat_message) => {
-                                        // Check to see if any subscribers of the destination channel have active connections
-                                        for subscriber in channel.subscribers {
-                                            if let Some(tx) = app_state.active_connections.read().await.get(subscriber.as_str()) {
-                                                let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
+                    let response: WebSocketResponse = {
+                        // Check if the message is going to a valid channel and that the user is a subscriber of it
+                        match get_chat_channel_by_id(&app_state.db, msg_to_create.channel_id.as_str()).await {
+                            Ok(channel) => {
+                                if channel.subscribers.contains(&user_id) {
+                                    // Create a db entry for this message
+                                    match insert_chat_message(&app_state.db, msg_to_create, user_id.as_str()).await {
+                                        Ok(chat_message) => {
+                                            // Check to see if any subscribers of the destination channel have active connections
+                                            for subscriber in channel.subscribers {
+                                                if let Some(tx) = app_state.active_connections.read().await.get(subscriber.as_str()) {
+                                                    let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
+                                                }
                                             }
+                                            let response = MessageCreatedResponse {
+                                                atomic_message_id: chat_message.atomic_id,
+                                                chat_channel_id: chat_message.channel_id,
+                                            };
+                                            WebSocketResponse::MessageCreated(response)
                                         }
-                                        let response = MessageCreatedResponse {
-                                            atomic_message_id: chat_message.atomic_id,
-                                            chat_channel_id: chat_message.channel_id,
-                                        };
-                                        Some(WebSocketResponse::MessageCreated(response))
+                                        Err(e) => e.into(),
                                     }
-                                    Err(_e) => Some(WebSocketResponse::ws_error(500, "Unhandled failure while creating a chat message")),
+                                } else {
+                                    WebSocketResponse::bad_request("You are not in this chat channel")
                                 }
-                            } else {
-                                Some(WebSocketResponse::ws_error(400, "You are not in this chat channel"))
                             }
-                        }
-                        Err(_) => {
-                            // TODO: Actual error handling, status code should be an enum
-                            Some(WebSocketResponse::ws_error(404, "Chat channel does not exist"))
+                            Err(e) => e.into(),
                         }
                     };
 
-                    if let Some(response) = maybe_response {
-                        let connections = app_state.active_connections.read().await;
-                        match connections.get(user_id.as_str()) {
-                            Some(tx) => {
-                                let _ = tx.send(response);
-                            }
-                            None => {
-                                // Currently active connection is gone, log this?
-                            }
-                        };
-                    }
+                    let connections = app_state.active_connections.read().await;
+                    match connections.get(user_id.as_str()) {
+                        Some(tx) => {
+                            let _ = tx.send(response);
+                        }
+                        None => {
+                            // Currently active connection is gone, log this?
+                        }
+                    };
                 }
+
+                // We got a request for the current chat state
                 Ok(WebSocketRequest::GetChatState(msg_request)) => {
                     let get_chat_state_res: WebSocketResponse = {
                         // This should be done in a validation step instead of being checked like this
                         if msg_request.message_count > 50 {
-                            WebSocketResponse::ws_error(400, "Can only request a maximum of 50 messages at a time")
+                            WebSocketResponse::bad_request("Can only request a maximum of 50 messages at a time")
                         } else {
                             match get_chat_channel_by_id(&app_state.db, msg_request.channel_id.as_str()).await {
                                 // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
@@ -131,13 +130,13 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                                         .await
                                         {
                                             Ok(messages) => WebSocketResponse::SendChatState(messages),
-                                            Err(_e) => WebSocketResponse::ws_error(500, "Unhandled error while reading chat messages"),
+                                            Err(e) => e.into(),
                                         }
                                     } else {
-                                        WebSocketResponse::ws_error(400, "You are not in this chat channel")
+                                        WebSocketResponse::bad_request("You are not in this chat channel")
                                     }
                                 }
-                                Err(_e) => WebSocketResponse::ws_error(404, "Chat channel does not exist"),
+                                Err(e) => e.into(),
                             }
                         }
                     };
@@ -151,9 +150,13 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                         }
                     };
                 }
+
+                // We got an error decoding the text packet using serde json
                 Err(_e) => {
+                    // TODO: ACTUAL ERROR HANDLING HERE WITH e
+
                     // Would be nice to give more info to the user here about what failed
-                    let websocket_error = WebSocketResponse::ws_error(400, "Failed to decode received data");
+                    let websocket_error = WebSocketResponse::bad_request("Failed to decode received data");
                     let connections = app_state.active_connections.read().await;
                     match connections.get(user_id.as_str()) {
                         Some(tx) => {
@@ -177,7 +180,7 @@ async fn write_messages(mut rx: mpsc::UnboundedReceiver<WebSocketResponse>, mut 
     while let Some(msg) = rx.recv().await {
         if let Ok(text) = serde_json::to_string(&msg) {
             if sender.send(Message::Text(text)).await.is_err() {
-                // TODO: HANDLE ERROR HERE
+                // Is there anything else to do here for error handling?
                 logger::log_msg("Error while sending a WebsocketMessage to a sender");
             }
         }
