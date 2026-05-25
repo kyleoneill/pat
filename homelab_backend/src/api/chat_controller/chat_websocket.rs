@@ -65,29 +65,59 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
         // to see what happens if I include Ping/Pong messages here on a match, as axum as-is
         // will automatically handle them for me
         if let Message::Text(text) = msg {
-            match serde_json::from_str::<WebSocketRequest>(text.as_str()) {
+            let response_to_client: WebSocketResponse = match serde_json::from_str::<WebSocketRequest>(text.as_str()) {
                 // We got a request to create a message
                 Ok(WebSocketRequest::CreateMessage(msg_to_create)) => {
-                    let response: WebSocketResponse = {
-                        // Check if the message is going to a valid channel and that the user is a subscriber of it
-                        match get_chat_channel_by_id(&app_state.db, msg_to_create.channel_id.as_str()).await {
+                    // Check if the message is going to a valid channel and that the user is a subscriber of it
+                    match get_chat_channel_by_id(&app_state.db, msg_to_create.channel_id.as_str()).await {
+                        Ok(channel) => {
+                            if channel.subscribers.contains(&user_id) {
+                                // Create a db entry for this message
+                                match insert_chat_message(&app_state.db, msg_to_create, user_id.as_str()).await {
+                                    Ok(chat_message) => {
+                                        // Check to see if any subscribers of the destination channel have active connections
+                                        for subscriber in channel.subscribers {
+                                            if let Some(tx) = app_state.active_connections.read().await.get(subscriber.as_str()) {
+                                                // Send a copy of this message to every connected client who is meant to receive it
+                                                let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
+                                            }
+                                        }
+                                        let response = MessageCreatedResponse {
+                                            atomic_message_id: chat_message.atomic_id,
+                                            chat_channel_id: chat_message.channel_id,
+                                        };
+                                        WebSocketResponse::MessageCreated(response)
+                                    }
+                                    Err(e) => e.into(),
+                                }
+                            } else {
+                                WebSocketResponse::bad_request("You are not in this chat channel")
+                            }
+                        }
+                        Err(e) => e.into(),
+                    }
+                }
+
+                // We got a request for the current chat state
+                Ok(WebSocketRequest::GetChatState(msg_request)) => {
+                    // This should be done in a validation step instead of being checked like this
+                    if msg_request.message_count > 50 {
+                        WebSocketResponse::bad_request("Can only request a maximum of 50 messages at a time")
+                    } else {
+                        match get_chat_channel_by_id(&app_state.db, msg_request.channel_id.as_str()).await {
+                            // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
+                            //       abstracted better
                             Ok(channel) => {
                                 if channel.subscribers.contains(&user_id) {
-                                    // Create a db entry for this message
-                                    match insert_chat_message(&app_state.db, msg_to_create, user_id.as_str()).await {
-                                        Ok(chat_message) => {
-                                            // Check to see if any subscribers of the destination channel have active connections
-                                            for subscriber in channel.subscribers {
-                                                if let Some(tx) = app_state.active_connections.read().await.get(subscriber.as_str()) {
-                                                    let _ = tx.send(WebSocketResponse::SendChatMessage(chat_message.clone()));
-                                                }
-                                            }
-                                            let response = MessageCreatedResponse {
-                                                atomic_message_id: chat_message.atomic_id,
-                                                chat_channel_id: chat_message.channel_id,
-                                            };
-                                            WebSocketResponse::MessageCreated(response)
-                                        }
+                                    match get_chat_message_span(
+                                        &app_state.db,
+                                        msg_request.atomic_message_id,
+                                        msg_request.channel_id.as_str(),
+                                        msg_request.message_count,
+                                    )
+                                    .await
+                                    {
+                                        Ok(messages) => WebSocketResponse::SendChatState(messages),
                                         Err(e) => e.into(),
                                     }
                                 } else {
@@ -96,79 +126,28 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                             }
                             Err(e) => e.into(),
                         }
-                    };
-
-                    let connections = app_state.active_connections.read().await;
-                    match connections.get(user_id.as_str()) {
-                        Some(tx) => {
-                            let _ = tx.send(response);
-                        }
-                        None => {
-                            // Currently active connection is gone, log this?
-                        }
-                    };
-                }
-
-                // We got a request for the current chat state
-                Ok(WebSocketRequest::GetChatState(msg_request)) => {
-                    let get_chat_state_res: WebSocketResponse = {
-                        // This should be done in a validation step instead of being checked like this
-                        if msg_request.message_count > 50 {
-                            WebSocketResponse::bad_request("Can only request a maximum of 50 messages at a time")
-                        } else {
-                            match get_chat_channel_by_id(&app_state.db, msg_request.channel_id.as_str()).await {
-                                // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
-                                //       abstracted better
-                                Ok(channel) => {
-                                    if channel.subscribers.contains(&user_id) {
-                                        match get_chat_message_span(
-                                            &app_state.db,
-                                            msg_request.atomic_message_id,
-                                            msg_request.channel_id.as_str(),
-                                            msg_request.message_count,
-                                        )
-                                        .await
-                                        {
-                                            Ok(messages) => WebSocketResponse::SendChatState(messages),
-                                            Err(e) => e.into(),
-                                        }
-                                    } else {
-                                        WebSocketResponse::bad_request("You are not in this chat channel")
-                                    }
-                                }
-                                Err(e) => e.into(),
-                            }
-                        }
-                    };
-                    let connections = app_state.active_connections.read().await;
-                    match connections.get(user_id.as_str()) {
-                        Some(tx) => {
-                            let _ = tx.send(get_chat_state_res);
-                        }
-                        None => {
-                            // Currently active connection is gone, log this?
-                        }
-                    };
+                    }
                 }
 
                 // We got an error decoding the text packet using serde json
                 Err(_e) => {
                     // TODO: ACTUAL ERROR HANDLING HERE WITH e
-
                     // Would be nice to give more info to the user here about what failed
-                    let websocket_error = WebSocketResponse::bad_request("Failed to decode received data");
-                    let connections = app_state.active_connections.read().await;
-                    match connections.get(user_id.as_str()) {
-                        Some(tx) => {
-                            let _ = tx.send(websocket_error);
-                        }
-                        None => {
-                            // Currently active connection is gone, log this?
-                        }
-                    };
                     logger::log_msg("Error while deserializing a websocket packet from a string");
+                    WebSocketResponse::bad_request("Failed to decode received data")
                 }
-            }
+            };
+
+            // Respond to the client who sent this request
+            let connections = app_state.active_connections.read().await;
+            match connections.get(user_id.as_str()) {
+                Some(tx) => {
+                    let _ = tx.send(response_to_client);
+                }
+                None => {
+                    // Currently active connection is gone, log this?
+                }
+            };
         }
     }
 
