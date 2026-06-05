@@ -142,7 +142,7 @@ async fn get_user_by_id(State(app_state): State<Arc<AppState>>, headers: HeaderM
     // TODO: Should have a general purpose permission handler
     // TODO: Should have a test for this
     if user.auth_level != AuthLevel::Admin {
-        return ReturnData::forbidden("Cannot retrieve an account you do not have access to".to_owned());
+        return ReturnData::forbidden("Cannot retrieve an account you do not have access to");
     }
 
     // Find and return the user
@@ -168,7 +168,7 @@ async fn delete_user_by_id(State(app_state): State<Arc<AppState>>, headers: Head
 
     // Check if the requester matches the account being deleted, or if they're an admin
     if user.get_id() != user_to_delete_id && user.auth_level != AuthLevel::Admin {
-        return ReturnData::forbidden("Cannot delete an account you do not have access to".to_string());
+        return ReturnData::forbidden("Cannot delete an account you do not have access to");
     };
 
     // Delete the user

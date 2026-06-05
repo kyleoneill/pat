@@ -3,6 +3,7 @@ use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
 use serde_json::json;
 use serde_json::value::Value;
+use std::fmt::Display;
 
 pub struct ReturnData<T> {
     status_code: StatusCode,
@@ -25,36 +26,36 @@ impl<T> ReturnData<T> {
     }
 
     // 4xx
-    pub fn not_found(error: String) -> Self {
+    pub fn not_found(error: impl Display) -> Self {
         Self {
             status_code: StatusCode::NOT_FOUND,
-            data: Err(json!({"msg": error})),
+            data: Err(json!({"msg": error.to_string()})),
         }
     }
-    pub fn bad_request(error: String) -> Self {
+    pub fn bad_request(error: impl Display) -> Self {
         Self {
             status_code: StatusCode::BAD_REQUEST,
-            data: Err(json!({"msg": error})),
+            data: Err(json!({"msg": error.to_string()})),
         }
     }
-    pub fn forbidden(error: String) -> Self {
+    pub fn forbidden(error: impl Display) -> Self {
         Self {
             status_code: StatusCode::FORBIDDEN,
-            data: Err(json!({"msg": error})),
+            data: Err(json!({"msg": error.to_string()})),
         }
     }
-    pub fn unauthorized(error: String) -> Self {
+    pub fn unauthorized(error: impl Display) -> Self {
         Self {
             status_code: StatusCode::UNAUTHORIZED,
-            data: Err(json!({"msg": error})),
+            data: Err(json!({"msg": error.to_string()})),
         }
     }
 
     // 500
-    pub fn internal_error(error: String) -> Self {
+    pub fn internal_error(error: impl Display) -> Self {
         Self {
             status_code: StatusCode::INTERNAL_SERVER_ERROR,
-            data: Err(json!({"msg": error})),
+            data: Err(json!({"msg": error.to_string()})),
         }
     }
 }

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 use super::message::ChatMessage;
 use super::validation::CreateMessageSchema;
@@ -11,7 +12,6 @@ pub struct RequestMessagesSchema {
 }
 
 // TODO: Define error codes, maybe just make an enum that serializes to ints?
-// TODO: I should have a from/into to convert DbError into a WebSocketError
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct WebSocketError {
     pub status_code: i64,
@@ -63,10 +63,38 @@ pub enum WebSocketResponse {
 }
 
 impl WebSocketResponse {
-    pub fn ws_error(status_code: i64, msg: &str) -> WebSocketResponse {
-        WebSocketResponse::SendError(WebSocketError {
-            status_code,
-            msg: msg.to_owned(),
+    pub fn bad_request(msg: impl Display) -> Self {
+        Self::SendError(WebSocketError {
+            status_code: 400,
+            msg: msg.to_string(),
+        })
+    }
+
+    pub fn unauthorized(msg: impl Display) -> Self {
+        Self::SendError(WebSocketError {
+            status_code: 401,
+            msg: msg.to_string(),
+        })
+    }
+
+    pub fn forbidden(msg: impl Display) -> Self {
+        Self::SendError(WebSocketError {
+            status_code: 403,
+            msg: msg.to_string(),
+        })
+    }
+
+    pub fn not_found(msg: impl Display) -> Self {
+        Self::SendError(WebSocketError {
+            status_code: 404,
+            msg: msg.to_string(),
+        })
+    }
+
+    pub fn internal_error(msg: impl Display) -> Self {
+        Self::SendError(WebSocketError {
+            status_code: 500,
+            msg: msg.to_string(),
         })
     }
 }
