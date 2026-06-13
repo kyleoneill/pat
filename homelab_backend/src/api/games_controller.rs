@@ -4,16 +4,16 @@ use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::app::AppState;
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::header::HeaderMap,
     routing::{get, post, put},
-    Json, Router,
 };
 
 use crate::models::games::{
+    ConnectionGame, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow,
     games_db::{get_all_connections_games, get_connection_game_by_slug, insert_connections_game},
     validation::CreateConnectionGameSchema,
-    ConnectionGame, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow,
 };
 
 pub fn games_routes() -> Router<Arc<AppState>> {
@@ -21,8 +21,8 @@ pub fn games_routes() -> Router<Arc<AppState>> {
         .route("/games/connections", post(create_connections))
         .route("/games/connections", get(list_other_connections_games))
         .route("/games/connections/mine", get(list_my_connections_games))
-        .route("/games/connections/play/:game_slug", get(get_game_to_play))
-        .route("/games/connections/play/:game_slug/try_solve", put(try_solve_row))
+        .route("/games/connections/play/{game_slug}", get(get_game_to_play))
+        .route("/games/connections/play/{game_slug}/try_solve", put(try_solve_row))
 }
 
 async fn create_connections(

@@ -1,22 +1,23 @@
 use std::sync::Arc;
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::header::HeaderMap,
     routing::{delete, get, post, put},
-    Json, Router,
 };
-use rand::{distr::Alphanumeric, Rng};
+use rand::RngExt;
+use rand::distr::Alphanumeric;
 use sha2::{Digest, Sha256};
 
 use crate::{
     api::{get_user_from_auth_header, return_data::ReturnData},
     app::AppState,
     models::user::{
+        AuthLevel, ReturnUser,
         jwt::encode_jwt,
         user_db::{db_create_user, db_delete_user, db_get_user_by_id, db_get_user_by_username, db_update_user},
         validation::{LoginUserSchema, UpdateUserSchema},
-        AuthLevel, ReturnUser,
     },
 };
 
@@ -27,7 +28,13 @@ pub fn hash_password(mut password: String, salt: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(password);
     let result = hasher.finalize();
-    format!("{result:X}")
+    let hash_len = result.0.len();
+
+    let mut hash_res = String::with_capacity(hash_len * 2);
+    for byte in result.0 {
+        hash_res.push_str(&format!("{:02X}", byte));
+    }
+    hash_res
 }
 
 pub fn generate_salt() -> String {
@@ -43,9 +50,9 @@ pub fn user_routes() -> Router<Arc<AppState>> {
         .route("/users", post(create_user))
         .route("/users/auth", post(auth_user))
         .route("/users/me", put(update_user_me))
-        .route("/users/:user_id", get(get_user_by_id))
+        .route("/users/{user_id}", get(get_user_by_id))
         .route("/users/me", get(get_user_me))
-        .route("/users/:user_id", delete(delete_user_by_id))
+        .route("/users/{user_id}", delete(delete_user_by_id))
         .route("/users/me", delete(delete_user_me))
 }
 // TODO: PUT /users/me and /users/:user_id
@@ -115,11 +122,11 @@ async fn update_user_me(
     // then this could put the db in a bad state, there is a tiny moment here between this
     // validation and the db being updated (Also relevant in the create_user function).
     // Not really important for a low use app, but how do other services solve this? Transaction?
-    if let Some(new_username) = &update_data.username {
-        if db_get_user_by_username(pool, new_username.as_str()).await.is_ok() {
-            return ReturnData::bad_request(format!("Username '{new_username}' is already taken"));
-        };
-    }
+    if let Some(new_username) = &update_data.username
+        && db_get_user_by_username(pool, new_username.as_str()).await.is_ok()
+    {
+        return ReturnData::bad_request(format!("Username '{new_username}' is already taken"));
+    };
 
     // If the user is changing their password, swap out the new password for its hash
     if let Some(new_password) = update_data.password {

@@ -1,7 +1,7 @@
-use crate::models::games::{validation::CreateConnectionGameSchema, ConnectionGame, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow};
+use crate::models::games::{ConnectionGame, MinimalConnectionsGame, PlayConnectionGame, TrySolveRow, validation::CreateConnectionGameSchema};
 use crate::testing::{
-    helpers::{get_request, post_request, put_request},
     TestHelper,
+    helpers::{get_request, post_request, put_request},
 };
 use axum::http::StatusCode;
 use serde_json::json;

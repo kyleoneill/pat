@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod chat_testing {
     use crate::testing::{
+        FAKE_MONGO_ID, TestHelper,
         helpers::user_helpers::{create_user, get_user_me},
-        TestHelper, FAKE_MONGO_ID,
     };
     use hyper::StatusCode;
 

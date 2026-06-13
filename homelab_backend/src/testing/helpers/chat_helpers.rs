@@ -5,15 +5,15 @@ use crate::models::chat::{
     validation::CreateChannelSchema,
 };
 use crate::testing::{
-    helpers::{get_request, post_request, put_request},
     TestHelper,
+    helpers::{get_request, post_request, put_request},
 };
 use axum::http::StatusCode;
 use futures::{SinkExt, StreamExt};
 use serde_json::json;
 use std::time::Duration;
 use tokio::{net::TcpStream, time::timeout};
-use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite};
 
 pub async fn create_chat_channel(
     test_helper: &TestHelper,
@@ -104,13 +104,13 @@ pub async fn send_websocket_request(socket: &mut WebSocketStream<MaybeTlsStream<
 async fn send_data_over_socket(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, data: &WebSocketRequest) {
     let serialized = serde_json::to_string(data).expect("Failed to serialize WebSocketRequest");
     socket
-        .send(tungstenite::Message::Text(serialized))
+        .send(tungstenite::Message::Text(serialized.into()))
         .await
         .expect("Failed to send data over a websocket");
 }
 
 pub async fn send_arbitrary_data(socket: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, data: String) {
-    match timeout(Duration::from_secs(10), socket.send(tungstenite::Message::Text(data))).await {
+    match timeout(Duration::from_secs(10), socket.send(tungstenite::Message::Text(data.into()))).await {
         Ok(_) => (),
         Err(_) => panic!("Failed to send arbitrary data over the websocket"),
     }

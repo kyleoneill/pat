@@ -9,11 +9,11 @@ mod user_testing;
 
 use crate::{app::generate_app, db::db_setup, tasks::task_manager::TaskManager};
 use axum::body::Body;
-use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
 use mongodb::{
-    bson::{doc, Document},
     Collection, Database,
+    bson::{Document, doc},
 };
 use serde::Serialize;
 use std::{

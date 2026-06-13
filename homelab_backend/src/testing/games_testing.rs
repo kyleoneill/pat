@@ -2,11 +2,11 @@
 mod games_testing {
     use crate::models::games::validation::{CreateConnectionCategorySchema, CreateConnectionGameSchema};
     use crate::testing::{
+        TestHelper,
         helpers::{
             games_helpers::{create_connections_game, get_game_to_play, list_connections_games, try_connections_solution},
             user_helpers::{create_user, get_user_me},
         },
-        TestHelper,
     };
     use hyper::StatusCode;
 

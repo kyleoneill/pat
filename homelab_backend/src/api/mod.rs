@@ -11,9 +11,9 @@ use crate::{
     db::PatDatabase,
     error_handler::{DbError, ServerError},
     models::user::{
+        User,
         jwt::{decode_jwt, get_and_decode_auth_token},
         user_db::db_get_user_by_id,
-        User,
     },
 };
 

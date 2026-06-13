@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -8,19 +8,19 @@ use axum::http::header::{
     ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, AUTHORIZATION, CACHE_CONTROL, CONNECTION, CONTENT_TYPE, DNT, HOST, ORIGIN, PRAGMA, REFERER,
     SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_EXTENSIONS, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, USER_AGENT,
 };
-use axum::http::Method;
-use axum::{http::Request, routing::get, Router};
+use axum::http::{Method, StatusCode};
+use axum::{Router, http::Request, routing::get};
 use hyper::header::UPGRADE;
 use tokio::{
-    sync::{mpsc as tokio_mpsc, watch, RwLock},
+    sync::{RwLock, mpsc as tokio_mpsc, watch},
     task, time,
 };
 use tower::ServiceBuilder;
 use tower_http::{
+    ServiceBuilderExt,
     cors::{Any, CorsLayer},
     timeout::TimeoutLayer,
     trace::TraceLayer,
-    ServiceBuilderExt,
 };
 
 use tracing::Span;
@@ -121,7 +121,7 @@ pub async fn generate_app(database: Database) -> (Router, Arc<Mutex<TaskManager>
 
     // Set up middleware, currently a timeout and CORS config
     let middleware = ServiceBuilder::new()
-        .layer(TimeoutLayer::new(Duration::from_secs(30)))
+        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
         // TODO: Getting a cross origin warning on the frontend that allow_headers(Any) will not be supported "soon".
         //       Will need to explicitly list headers that are allowed, like Authorization
         .layer(

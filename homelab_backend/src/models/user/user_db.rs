@@ -1,9 +1,9 @@
 use crate::{
-    db::{str_to_object_id, MongoModel, PatDatabase},
+    db::{MongoModel, PatDatabase, str_to_object_id},
     error_handler::DbError,
-    models::user::{validation::UpdateUserSchema, AuthLevel, User},
+    models::user::{AuthLevel, User, validation::UpdateUserSchema},
 };
-use mongodb::bson::{doc, oid::ObjectId, Bson, Document};
+use mongodb::bson::{Bson, Document, doc, oid::ObjectId};
 
 impl MongoModel for User {
     fn collection_name() -> &'static str {
@@ -12,11 +12,8 @@ impl MongoModel for User {
     fn model_name() -> &'static str {
         "User"
     }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
+    fn get_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 

@@ -1,9 +1,9 @@
 use crate::{
-    db::{str_to_object_id, MongoModel, PatDatabase},
+    db::{MongoModel, PatDatabase, str_to_object_id},
     error_handler::DbError,
     models::log::Log,
 };
-use mongodb::bson::{doc, oid::ObjectId, Bson};
+use mongodb::bson::{Bson, doc};
 
 impl MongoModel for Log {
     fn collection_name() -> &'static str {
@@ -12,11 +12,8 @@ impl MongoModel for Log {
     fn model_name() -> &'static str {
         "Log"
     }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
+    fn get_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 

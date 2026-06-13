@@ -1,10 +1,10 @@
-use super::{validation::CreateConnectionGameSchema, ConnectionGame};
+use super::{ConnectionGame, validation::CreateConnectionGameSchema};
 use crate::{
     db::{MongoModel, PatDatabase},
     error_handler::DbError,
     models::name_to_slug,
 };
-use mongodb::bson::{doc, oid::ObjectId};
+use mongodb::bson::doc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 impl MongoModel for ConnectionGame {
@@ -14,11 +14,8 @@ impl MongoModel for ConnectionGame {
     fn model_name() -> &'static str {
         "Connections Game"
     }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
+    fn get_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 

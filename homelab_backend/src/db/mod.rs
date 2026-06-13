@@ -1,10 +1,10 @@
 use crate::error_handler::DbError;
 use futures::TryStreamExt;
 use mongodb::{
-    bson::{doc, oid::ObjectId, Bson, Document},
+    Collection, Database,
+    bson::{Bson, Document, doc, oid::ObjectId},
     error::Error,
     options::FindOneAndUpdateOptions,
-    Collection, Database,
 };
 use serde::de::DeserializeOwned;
 
@@ -20,7 +20,13 @@ pub fn str_to_object_id(object_str: &str) -> Result<ObjectId, Error> {
 pub trait MongoModel {
     fn collection_name() -> &'static str;
     fn model_name() -> &'static str;
-    fn mongo_id(&self) -> Result<ObjectId, DbError>;
+    fn get_id(&self) -> &str;
+    fn mongo_id(&self) -> Result<ObjectId, DbError> {
+        match self.get_id().parse::<ObjectId>() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(DbError::BadId),
+        }
+    }
 }
 
 // Derives clone so tasks can copy a handle to the pool to be moved into an async block, cloning

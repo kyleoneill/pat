@@ -1,8 +1,7 @@
 use futures::StreamExt;
 use mongodb::{
-    bson,
-    bson::{doc, oid::ObjectId, Bson},
-    Collection,
+    Collection, bson,
+    bson::{Bson, doc, oid::ObjectId},
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -10,8 +9,8 @@ use crate::{
     db::{MongoModel, PatDatabase},
     error_handler::DbError,
     models::reminder::{
-        validation::{CreateCategorySchema, CreateReminderSchema, UpdateReminderSchema},
         Category, Reminder,
+        validation::{CreateCategorySchema, CreateReminderSchema, UpdateReminderSchema},
     },
 };
 
@@ -22,11 +21,8 @@ impl MongoModel for Reminder {
     fn model_name() -> &'static str {
         "Reminder"
     }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
+    fn get_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 
@@ -37,11 +33,8 @@ impl MongoModel for Category {
     fn model_name() -> &'static str {
         "Reminder Category"
     }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
+    fn get_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 

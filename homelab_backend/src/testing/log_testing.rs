@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod log_testing {
     use crate::testing::{
+        TestHelper,
         helpers::{
             log_helpers::get_logs_for_user,
             user_helpers::{auth_user, create_user, get_user_me},
         },
-        TestHelper,
     };
 
     #[tokio::test]

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod user_testing {
     use crate::models::user::validation::UpdateUserSchema;
-    use crate::testing::helpers::user_helpers::{auth_user, create_user, delete_user_me, get_user_me, update_user};
     use crate::testing::TestHelper;
+    use crate::testing::helpers::user_helpers::{auth_user, create_user, delete_user_me, get_user_me, update_user};
     use axum::http::StatusCode;
 
     #[tokio::test]

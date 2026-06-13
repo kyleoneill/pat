@@ -1,6 +1,6 @@
-use crate::models::user::{validation::UpdateUserSchema, ReturnUser};
-use crate::testing::helpers::{delete_request, get_request, post_request, put_request};
+use crate::models::user::{ReturnUser, validation::UpdateUserSchema};
 use crate::testing::TestHelper;
+use crate::testing::helpers::{delete_request, get_request, post_request, put_request};
 use axum::http::StatusCode;
 use serde_json::json;
 

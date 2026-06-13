@@ -5,11 +5,13 @@ use crate::models::chat::message_db::{get_chat_message_span, insert_chat_message
 use crate::models::chat::packet::{MessageCreatedResponse, WebSocketRequest, WebSocketResponse};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{
-    stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
 };
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc;
+
+const MAX_MSG_COUNT: i64 = 50;
 
 pub(super) async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app_state: Arc<AppState>) {
     // Create a channel to send messages
@@ -48,7 +50,7 @@ pub(super) async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: 
         _ = write_task => {},
     }
 
-    // Cleanup, in case the write_task is closed before the read_task
+    // Clean up on disconnect
     app_state.active_connections.write().await.remove(user_id.as_str());
 }
 
@@ -73,7 +75,7 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                         Ok(channel) => {
                             if channel.subscribers.contains(&user_id) {
                                 // Create a db entry for this message
-                                match insert_chat_message(&app_state.db, msg_to_create, user_id.as_str()).await {
+                                match insert_chat_message(&app_state.db, msg_to_create, user_id.clone()).await {
                                     Ok(chat_message) => {
                                         // Check to see if any subscribers of the destination channel have active connections
                                         for subscriber in channel.subscribers {
@@ -101,8 +103,8 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                 // We got a request for the current chat state
                 Ok(WebSocketRequest::GetChatState(msg_request)) => {
                     // This should be done in a validation step instead of being checked like this
-                    if msg_request.message_count > 50 {
-                        WebSocketResponse::bad_request("Can only request a maximum of 50 messages at a time")
+                    if msg_request.message_count > MAX_MSG_COUNT {
+                        WebSocketResponse::bad_request(format!("Can only request a maximum of {} messages at a time", MAX_MSG_COUNT))
                     } else {
                         match get_chat_channel_by_id(&app_state.db, msg_request.channel_id.as_str()).await {
                             // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
@@ -157,11 +159,11 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
 
 async fn write_messages(mut rx: mpsc::UnboundedReceiver<WebSocketResponse>, mut sender: SplitSink<WebSocket, Message>) {
     while let Some(msg) = rx.recv().await {
-        if let Ok(text) = serde_json::to_string(&msg) {
-            if sender.send(Message::Text(text)).await.is_err() {
-                // Is there anything else to do here for error handling?
-                logger::log_msg("Error while sending a WebsocketMessage to a sender");
-            }
+        if let Ok(text) = serde_json::to_string(&msg)
+            && sender.send(Message::Text(text.into())).await.is_err()
+        {
+            // Is there anything else to do here for error handling?
+            logger::log_msg("Error while sending a WebsocketMessage to a sender");
         }
     }
 }
