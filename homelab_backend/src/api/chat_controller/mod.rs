@@ -231,12 +231,8 @@ async fn chat_connect(
         }
     };
 
-    // ws.on_upgrade(move |socket| chat_websocket::handle_socket(socket, addr, user.get_id(), app_state))
     ws.on_upgrade(async move |socket| {
         let user_id = user.get_id();
         chat_websocket::handle_socket(socket, addr, user_id, app_state).await
-        // async move {
-        //     chat_websocket::handle_socket(socket, addr, user_id, app_state).await
-        // }
     })
 }
