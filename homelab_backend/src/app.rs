@@ -45,7 +45,7 @@ pub struct AppState {
     // disconnects are being made, maybe 400k users for a 4GHz processor. App state will lock every
     // single time there is a connect/disconnect and prevent processing messages being sent while
     // active_connections is being updated
-    pub active_connections: Arc<RwLock<HashMap<String, tokio_mpsc::UnboundedSender<WebSocketResponse>>>>,
+    pub active_connections: RwLock<HashMap<String, tokio_mpsc::UnboundedSender<WebSocketResponse>>>,
     pub task_manager: Arc<Mutex<TaskManager>>,
 }
 
@@ -198,7 +198,7 @@ pub async fn generate_app(database: Database) -> (Router, Arc<Mutex<TaskManager>
     let state = Arc::new(AppState {
         db: handle,
         config,
-        active_connections: Arc::new(RwLock::new(HashMap::new())),
+        active_connections: RwLock::new(HashMap::new()),
         task_manager: task_manager.clone(),
     });
     (

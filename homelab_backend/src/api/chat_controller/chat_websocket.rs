@@ -14,14 +14,12 @@ use tokio::sync::mpsc;
 const MAX_MSG_COUNT: i64 = 50;
 
 pub(super) async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app_state: Arc<AppState>) {
-    let active_connections = Arc::clone(&app_state.active_connections);
-
     // Create a channel to send messages
     let (tx, rx) = mpsc::unbounded_channel::<WebSocketResponse>();
 
     // Register the connection. Do this in a block so the RwLock lock is dropped asap
     {
-        let mut connections = active_connections.write().await;
+        let mut connections = app_state.active_connections.write().await;
 
         // If the user already has a connection, remove the old one
         let _res = connections.remove(user_id.as_str());
@@ -53,7 +51,7 @@ pub(super) async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: 
     }
 
     // Clean up on disconnect
-    active_connections.write().await.remove(user_id.as_str());
+    app_state.active_connections.write().await.remove(user_id.as_str());
 }
 
 async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, app_state: Arc<AppState>) {
