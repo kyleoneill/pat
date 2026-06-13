@@ -1,5 +1,5 @@
 use crate::{
-    db::{str_to_object_id, MongoModel, PatDatabase},
+    db::{MongoModel, PatDatabase, str_to_object_id},
     error_handler::DbError,
     logger::log_msg,
     models::{
@@ -7,10 +7,10 @@ use crate::{
             chat_channel::{ChatChannel, ReturnChannel},
             validation::CreateChannelSchema,
         },
-        user::{user_db::db_get_user_by_id, ReturnUser},
+        user::{ReturnUser, user_db::db_get_user_by_id},
     },
 };
-use mongodb::bson::{doc, oid::ObjectId, Bson, Document};
+use mongodb::bson::{Bson, Document, doc};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 impl MongoModel for ChatChannel {
@@ -20,11 +20,8 @@ impl MongoModel for ChatChannel {
     fn model_name() -> &'static str {
         "Chat Channel"
     }
-    fn mongo_id(&self) -> Result<ObjectId, DbError> {
-        match self.id.parse::<ObjectId>() {
-            Ok(res) => Ok(res),
-            Err(_) => Err(DbError::BadId),
-        }
+    fn get_id(&self) -> &str {
+        self.id.as_str()
     }
 }
 

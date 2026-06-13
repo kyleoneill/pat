@@ -2,22 +2,22 @@ use super::get_user_from_auth_header;
 use super::return_data::ReturnData;
 use crate::app::AppState;
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::header::HeaderMap,
     routing::{delete, get, post, put},
-    Json, Router,
 };
 use axum_extra::extract::Query as ListQuery;
 use serde::Deserialize;
 use std::sync::Arc;
 
 use crate::models::reminder::{
+    Category, Reminder,
     reminder_db::{
         db_delete_reminder, db_update_reminder, delete_category_by_id, get_categories_for_user, get_reminders_for_user, insert_category,
         insert_reminder,
     },
     validation::{CreateCategorySchema, CreateReminderSchema, UpdateReminderSchema},
-    Category, Reminder,
 };
 
 pub fn reminder_routes() -> Router<Arc<AppState>> {
@@ -25,12 +25,12 @@ pub fn reminder_routes() -> Router<Arc<AppState>> {
         // Reminders
         .route("/reminders", post(create_reminder))
         .route("/reminders", get(list_reminders))
-        .route("/reminders/:reminder_id", put(update_reminder))
-        .route("/reminders/:reminder_id", delete(delete_reminder))
+        .route("/reminders/{reminder_id}", put(update_reminder))
+        .route("/reminders/{reminder_id}", delete(delete_reminder))
         // Categories
         .route("/reminders/category", post(create_category))
         .route("/reminders/category", get(get_categories))
-        .route("/reminders/category/:category_id", delete(delete_category))
+        .route("/reminders/category/{category_id}", delete(delete_category))
 }
 
 async fn create_category(

@@ -1,4 +1,4 @@
-use mongodb::bson::{doc, Document};
+use mongodb::bson::{Document, doc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod reminder_testing {
-    use crate::models::reminder::{validation::UpdateReminderSchema, Priority, Reminder};
+    use crate::models::reminder::{Priority, Reminder, validation::UpdateReminderSchema};
     use crate::testing::{
+        TestHelper,
         helpers::{
             put_request,
             reminder_helpers::{
@@ -10,7 +11,6 @@ mod reminder_testing {
             },
             user_helpers::{create_user, get_user_me},
         },
-        TestHelper,
     };
     use hyper::StatusCode;
     use serde_json::json;

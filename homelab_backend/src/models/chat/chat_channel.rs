@@ -1,6 +1,6 @@
 use super::super::deserialize_id;
 use crate::models::user::ReturnUser;
-use mongodb::bson::{doc, Bson};
+use mongodb::bson::{Bson, doc};
 use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, PartialEq, Clone, Debug)]

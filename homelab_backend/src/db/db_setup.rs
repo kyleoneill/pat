@@ -1,4 +1,4 @@
-use mongodb::{bson::doc, options::IndexOptions, Client, Collection, Database, IndexModel};
+use mongodb::{Client, Collection, Database, IndexModel, bson::doc, options::IndexOptions};
 
 use crate::{
     db::PatDatabase,
@@ -6,7 +6,7 @@ use crate::{
         chat::{chat_channel::ChatChannel, message::ChatMessage},
         games::ConnectionGame,
         reminder::Category,
-        user::{user_db::db_create_user, AuthLevel, User},
+        user::{AuthLevel, User, user_db::db_create_user},
     },
 };
 

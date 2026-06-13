@@ -1,6 +1,6 @@
 use super::message::Reactions;
 use crate::util::current_unix_time;
-use mongodb::bson::{doc, Document};
+use mongodb::bson::{Document, doc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]

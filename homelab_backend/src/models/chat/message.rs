@@ -1,5 +1,5 @@
 use super::super::deserialize_id;
-use mongodb::bson::{doc, Bson};
+use mongodb::bson::{Bson, doc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

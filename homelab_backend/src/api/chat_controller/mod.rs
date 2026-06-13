@@ -10,14 +10,14 @@ use crate::models::chat::{
     validation::CreateChannelSchema,
 };
 use axum::{
+    Json, Router,
     body::Body,
-    extract::{connect_info::ConnectInfo, ws::WebSocketUpgrade, Path, Query, State},
-    http::{header::HeaderMap, Response, StatusCode},
+    extract::{Path, Query, State, connect_info::ConnectInfo, ws::WebSocketUpgrade},
+    http::{Response, StatusCode, header::HeaderMap},
     response::IntoResponse,
     routing::{get, post, put},
-    Json, Router,
 };
-use mongodb::bson::{doc, oid::ObjectId, Bson, Document};
+use mongodb::bson::{Bson, Document, doc, oid::ObjectId};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
 
@@ -28,7 +28,7 @@ pub fn chat_routes() -> Router<Arc<AppState>> {
         .route("/chat/channels", get(list_channels))
         .route("/chat/channels/subscribe", put(channel_subscribe))
         .route("/chat/channels/unsubscribe", put(channel_unsubscribe))
-        .route("/chat/channels/:channel_id", get(get_channel))
+        .route("/chat/channels/{channel_id}", get(get_channel))
 }
 
 async fn create_channel(
@@ -231,5 +231,12 @@ async fn chat_connect(
         }
     };
 
-    ws.on_upgrade(move |socket| chat_websocket::handle_socket(socket, addr, user.get_id(), app_state))
+    // ws.on_upgrade(move |socket| chat_websocket::handle_socket(socket, addr, user.get_id(), app_state))
+    ws.on_upgrade(async move |socket| {
+        let user_id = user.get_id();
+        chat_websocket::handle_socket(socket, addr, user_id, app_state).await
+        // async move {
+        //     chat_websocket::handle_socket(socket, addr, user_id, app_state).await
+        // }
+    })
 }

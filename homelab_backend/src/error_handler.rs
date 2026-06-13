@@ -33,10 +33,10 @@ impl From<mongodb::error::Error> for DbError {
                 _ => DbError::UnhandledException("Unhandled error while writing data".to_owned()),
             },
             ErrorKind::Custom(custom_message) => {
-                if let Ok(custom_error_message) = custom_message.downcast::<String>() {
-                    if let Some(owned_error_message) = Arc::into_inner(custom_error_message) {
-                        return DbError::CustomMongoFailure(owned_error_message);
-                    }
+                if let Ok(custom_error_message) = custom_message.downcast::<String>()
+                    && let Some(owned_error_message) = Arc::into_inner(custom_error_message)
+                {
+                    return DbError::CustomMongoFailure(owned_error_message);
                 }
                 DbError::UnhandledException("Unhandled failure while resolving custom MongoDB error".to_string())
             }

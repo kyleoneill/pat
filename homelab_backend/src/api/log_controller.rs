@@ -1,8 +1,8 @@
 use axum::{
+    Router,
     extract::{Path, State},
     http::header::HeaderMap,
     routing::get,
-    Router,
 };
 use std::sync::Arc;
 
@@ -10,15 +10,15 @@ use crate::{
     api::{get_user_from_auth_header, return_data::ReturnData},
     app::AppState,
     models::log::{
-        log_db::{db_get_log_by_id, db_get_logs_for_user},
         Log,
+        log_db::{db_get_log_by_id, db_get_logs_for_user},
     },
 };
 
 pub fn log_routes() -> Router<Arc<AppState>> {
     Router::<Arc<AppState>>::new()
         .route("/logs", get(get_logs))
-        .route("/logs/:log_id", get(get_log_by_id))
+        .route("/logs/{log_id}", get(get_log_by_id))
 }
 
 async fn get_logs(State(app_state): State<Arc<AppState>>, headers: HeaderMap) -> ReturnData<Vec<Log>> {
