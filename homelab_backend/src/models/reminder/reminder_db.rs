@@ -120,18 +120,13 @@ pub async fn db_update_reminder(db_handle: &PatDatabase, reminder_id: String, up
         Err(_) => return Err(DbError::UnhandledException("Failed to process update request data".to_string())),
     };
 
-    if doc.is_empty() {
-        return Err(DbError::EmptyDbExpression(Reminder::model_name(), "updating".to_owned()));
-    }
-
     let bson_id: ObjectId = match reminder_id.parse() {
         Ok(bson_id) => bson_id,
         Err(_) => return Err(DbError::BadId),
     };
     let filter_doc = doc! { "_id": Bson::ObjectId(bson_id) };
 
-    let update_doc = doc! { "$set": doc};
-    db_handle.find_and_update_one(filter_doc, update_doc).await
+    db_handle.find_and_update_one(filter_doc, doc).await
 }
 
 pub async fn db_delete_reminder(db_handle: &PatDatabase, reminder_id: String, user_id: String) -> Result<(), DbError> {

@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 use super::message::ChatMessage;
-use super::validation::CreateMessageSchema;
+use super::validation::{CreateMessageSchema, EditMessageSchema};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RequestMessagesSchema {
-    pub message_count: i64,
+    pub message_count: usize,
     pub atomic_message_id: i64,
     pub channel_id: String,
 }
@@ -33,6 +33,7 @@ The above will serialize the enum to look like
 pub enum WebSocketRequest {
     CreateMessage(CreateMessageSchema),
     GetChatState(RequestMessagesSchema),
+    EditMessage(EditMessageSchema),
 }
 
 impl From<CreateMessageSchema> for WebSocketRequest {
@@ -44,6 +45,12 @@ impl From<CreateMessageSchema> for WebSocketRequest {
 impl From<RequestMessagesSchema> for WebSocketRequest {
     fn from(value: RequestMessagesSchema) -> Self {
         WebSocketRequest::GetChatState(value)
+    }
+}
+
+impl From<EditMessageSchema> for WebSocketRequest {
+    fn from(value: EditMessageSchema) -> Self {
+        WebSocketRequest::EditMessage(value)
     }
 }
 
@@ -101,4 +108,3 @@ impl WebSocketResponse {
 
 // TODO: React to message packet (receive and send)
 // TODO: Pin message packet (receive and send)
-// TODO: Edit message

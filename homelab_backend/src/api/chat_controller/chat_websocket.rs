@@ -1,7 +1,7 @@
 use crate::app::AppState;
 use crate::logger;
 use crate::models::chat::chat_channel_db::get_chat_channel_by_id;
-use crate::models::chat::message_db::{get_chat_message_span, insert_chat_message};
+use crate::models::chat::message_db::{get_chat_message, get_chat_message_span, insert_chat_message, update_chat_message};
 use crate::models::chat::packet::{MessageCreatedResponse, WebSocketRequest, WebSocketResponse};
 use axum::extract::ws::{Message, WebSocket};
 use futures::{
@@ -11,7 +11,7 @@ use futures::{
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc;
 
-const MAX_MSG_COUNT: i64 = 50;
+const MAX_MSG_COUNT: usize = 50;
 
 pub(super) async fn handle_socket(socket: WebSocket, _who: SocketAddr, user_id: String, app_state: Arc<AppState>) {
     // Create a channel to send messages
@@ -128,6 +128,41 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                             }
                             Err(e) => e.into(),
                         }
+                    }
+                }
+
+                Ok(WebSocketRequest::EditMessage(edit_msg)) => {
+                    // Get the message prior to updating it to confirm that this user has the ability to edit it
+                    match get_chat_message(&app_state.db, edit_msg.message_id.as_str()).await {
+                        Ok(message) => {
+                            if message.author_id.as_str() == user_id.as_str() {
+                                match update_chat_message(&app_state.db, edit_msg.message_id.as_str(), &edit_msg).await {
+                                    Ok(edited_message) => {
+                                        match get_chat_channel_by_id(&app_state.db, edited_message.channel_id.as_str()).await {
+                                            Ok(channel) => {
+                                                // This is duplicate code, should be DRY'd?
+                                                for subscriber in channel.subscribers {
+                                                    if let Some(tx) = app_state.active_connections.read().await.get(subscriber.as_str()) {
+                                                        // Send a copy of this message to every connected client who is meant to receive it
+                                                        let _ = tx.send(WebSocketResponse::SendChatMessage(edited_message.clone()));
+                                                    }
+                                                }
+                                                // This should do nothing but it has to return a WebSocketResponse,
+                                                // and is currently sending a duplicate response to the editor. the
+                                                // outer block should have response_to_client be an Option, and then
+                                                // optionally send a response if it's Some
+                                                WebSocketResponse::SendChatMessage(edited_message)
+                                            }
+                                            Err(e) => e.into(),
+                                        }
+                                    }
+                                    Err(e) => e.into(),
+                                }
+                            } else {
+                                WebSocketResponse::forbidden("You must be the author of a message to edit it")
+                            }
+                        }
+                        Err(e) => e.into(),
                     }
                 }
 
