@@ -67,11 +67,11 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
         // to see what happens if I include Ping/Pong messages here on a match, as axum as-is
         // will automatically handle them for me
         if let Message::Text(text) = msg {
-            let response_to_client: WebSocketResponse = match serde_json::from_str::<WebSocketRequest>(text.as_str()) {
+            let response_to_client: Option<WebSocketResponse> = match serde_json::from_str::<WebSocketRequest>(text.as_str()) {
                 // We got a request to create a message
                 Ok(WebSocketRequest::CreateMessage(msg_to_create)) => {
                     // Check if the message is going to a valid channel and that the user is a subscriber of it
-                    match get_chat_channel_by_id(&app_state.db, msg_to_create.channel_id.as_str()).await {
+                    let create_res = match get_chat_channel_by_id(&app_state.db, msg_to_create.channel_id.as_str()).await {
                         Ok(channel) => {
                             if channel.subscribers.contains(&user_id) {
                                 // Create a db entry for this message
@@ -97,38 +97,42 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                             }
                         }
                         Err(e) => e.into(),
-                    }
+                    };
+                    Some(create_res)
                 }
 
                 // We got a request for the current chat state
                 Ok(WebSocketRequest::GetChatState(msg_request)) => {
-                    // This should be done in a validation step instead of being checked like this
-                    if msg_request.message_count > MAX_MSG_COUNT {
-                        WebSocketResponse::bad_request(format!("Can only request a maximum of {} messages at a time", MAX_MSG_COUNT))
-                    } else {
-                        match get_chat_channel_by_id(&app_state.db, msg_request.channel_id.as_str()).await {
-                            // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
-                            //       abstracted better
-                            Ok(channel) => {
-                                if channel.subscribers.contains(&user_id) {
-                                    match get_chat_message_span(
-                                        &app_state.db,
-                                        msg_request.atomic_message_id,
-                                        msg_request.channel_id.as_str(),
-                                        msg_request.message_count,
-                                    )
-                                    .await
-                                    {
-                                        Ok(messages) => WebSocketResponse::SendChatState(messages),
-                                        Err(e) => e.into(),
+                    let get_state_res = {
+                        // This should be done in a validation step instead of being checked like this
+                        if msg_request.message_count > MAX_MSG_COUNT {
+                            WebSocketResponse::bad_request(format!("Can only request a maximum of {} messages at a time", MAX_MSG_COUNT))
+                        } else {
+                            match get_chat_channel_by_id(&app_state.db, msg_request.channel_id.as_str()).await {
+                                // TODO: Getting the channel and checking if the user is in it is being repeated, this should be
+                                //       abstracted better
+                                Ok(channel) => {
+                                    if channel.subscribers.contains(&user_id) {
+                                        match get_chat_message_span(
+                                            &app_state.db,
+                                            msg_request.atomic_message_id,
+                                            msg_request.channel_id.as_str(),
+                                            msg_request.message_count,
+                                        )
+                                        .await
+                                        {
+                                            Ok(messages) => WebSocketResponse::SendChatState(messages),
+                                            Err(e) => e.into(),
+                                        }
+                                    } else {
+                                        WebSocketResponse::bad_request("You are not in this chat channel")
                                     }
-                                } else {
-                                    WebSocketResponse::bad_request("You are not in this chat channel")
                                 }
+                                Err(e) => e.into(),
                             }
-                            Err(e) => e.into(),
                         }
-                    }
+                    };
+                    Some(get_state_res)
                 }
 
                 Ok(WebSocketRequest::EditMessage(edit_msg)) => {
@@ -144,25 +148,21 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                                                 for subscriber in channel.subscribers {
                                                     if let Some(tx) = app_state.active_connections.read().await.get(subscriber.as_str()) {
                                                         // Send a copy of this message to every connected client who is meant to receive it
-                                                        let _ = tx.send(WebSocketResponse::SendChatMessage(edited_message.clone()));
+                                                        let _ = tx.send(WebSocketResponse::SendUpdatedChatMessage(edited_message.clone()));
                                                     }
                                                 }
-                                                // This should do nothing but it has to return a WebSocketResponse,
-                                                // and is currently sending a duplicate response to the editor. the
-                                                // outer block should have response_to_client be an Option, and then
-                                                // optionally send a response if it's Some
-                                                WebSocketResponse::SendChatMessage(edited_message)
+                                                None
                                             }
-                                            Err(e) => e.into(),
+                                            Err(e) => Some(e.into()),
                                         }
                                     }
-                                    Err(e) => e.into(),
+                                    Err(e) => Some(e.into()),
                                 }
                             } else {
-                                WebSocketResponse::forbidden("You must be the author of a message to edit it")
+                                Some(WebSocketResponse::forbidden("You must be the author of a message to edit it"))
                             }
                         }
-                        Err(e) => e.into(),
+                        Err(e) => Some(e.into()),
                     }
                 }
 
@@ -171,20 +171,22 @@ async fn read_messages(mut receiver: SplitStream<WebSocket>, user_id: String, ap
                     // TODO: ACTUAL ERROR HANDLING HERE WITH e
                     // Would be nice to give more info to the user here about what failed
                     logger::log_msg("Error while deserializing a websocket packet from a string");
-                    WebSocketResponse::bad_request("Failed to decode received data")
+                    Some(WebSocketResponse::bad_request("Failed to decode received data"))
                 }
             };
 
             // Respond to the client who sent this request
-            let connections = app_state.active_connections.read().await;
-            match connections.get(user_id.as_str()) {
-                Some(tx) => {
-                    let _ = tx.send(response_to_client);
-                }
-                None => {
-                    // Currently active connection is gone, log this?
-                }
-            };
+            if let Some(response) = response_to_client {
+                let connections = app_state.active_connections.read().await;
+                match connections.get(user_id.as_str()) {
+                    Some(tx) => {
+                        let _ = tx.send(response);
+                    }
+                    None => {
+                        // Currently active connection is gone, log this?
+                    }
+                };
+            }
         }
     }
 

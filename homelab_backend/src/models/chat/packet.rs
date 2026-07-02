@@ -65,6 +65,8 @@ pub struct MessageCreatedResponse {
 pub enum WebSocketResponse {
     MessageCreated(MessageCreatedResponse),
     SendChatMessage(ChatMessage),
+    // Data is the same as SendChatMessage, the distinction is so the client has more info about how to handle the packet
+    SendUpdatedChatMessage(ChatMessage),
     SendChatState(Vec<ChatMessage>),
     SendError(WebSocketError),
 }
