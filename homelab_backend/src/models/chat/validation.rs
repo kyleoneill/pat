@@ -17,6 +17,13 @@ pub struct CreateMessageSchema {
     pub reply_to: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct EditMessageSchema {
+    pub message_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contents: Option<String>,
+}
+
 impl CreateMessageSchema {
     pub fn create_message_doc(self, user_id: &str, atomic_id: i64) -> Document {
         let current_time = current_unix_time();

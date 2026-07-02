@@ -57,6 +57,7 @@ pub async fn receive_chat_message(socket: &mut WebSocketStream<MaybeTlsStream<Tc
                 _ => panic!("Should only SendChatMessage or SendError when getting a chat message"),
             }
         }
+        WebSocketResponse::SendUpdatedChatMessage(updated_message) => Ok(updated_message),
         _ => panic!("Should only receive SendChatMessage or SendError when getting a chat message"),
     }
 }

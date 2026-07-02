@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 use super::message::ChatMessage;
-use super::validation::CreateMessageSchema;
+use super::validation::{CreateMessageSchema, EditMessageSchema};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RequestMessagesSchema {
-    pub message_count: i64,
+    pub message_count: usize,
     pub atomic_message_id: i64,
     pub channel_id: String,
 }
@@ -33,6 +33,7 @@ The above will serialize the enum to look like
 pub enum WebSocketRequest {
     CreateMessage(CreateMessageSchema),
     GetChatState(RequestMessagesSchema),
+    EditMessage(EditMessageSchema),
 }
 
 impl From<CreateMessageSchema> for WebSocketRequest {
@@ -47,6 +48,12 @@ impl From<RequestMessagesSchema> for WebSocketRequest {
     }
 }
 
+impl From<EditMessageSchema> for WebSocketRequest {
+    fn from(value: EditMessageSchema) -> Self {
+        WebSocketRequest::EditMessage(value)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct MessageCreatedResponse {
     pub atomic_message_id: i64,
@@ -58,6 +65,8 @@ pub struct MessageCreatedResponse {
 pub enum WebSocketResponse {
     MessageCreated(MessageCreatedResponse),
     SendChatMessage(ChatMessage),
+    // Data is the same as SendChatMessage, the distinction is so the client has more info about how to handle the packet
+    SendUpdatedChatMessage(ChatMessage),
     SendChatState(Vec<ChatMessage>),
     SendError(WebSocketError),
 }
@@ -101,4 +110,3 @@ impl WebSocketResponse {
 
 // TODO: React to message packet (receive and send)
 // TODO: Pin message packet (receive and send)
-// TODO: Edit message

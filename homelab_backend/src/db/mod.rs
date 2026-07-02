@@ -1,4 +1,5 @@
 use crate::error_handler::DbError;
+use crate::util::current_unix_time;
 use futures::TryStreamExt;
 use mongodb::{
     Collection, Database,
@@ -114,11 +115,26 @@ impl PatDatabase {
     }
 
     #[allow(dead_code)]
-    pub async fn update_one<T>(&self, filter_doc: Document, update_doc: Document) -> Result<u64, DbError>
+    pub async fn update_one<T>(&self, filter_doc: Document, mut update_doc: Document) -> Result<u64, DbError>
     where
         T: MongoModel + Send + Sync + DeserializeOwned,
     {
+        if update_doc.is_empty() {
+            return Err(DbError::EmptyDbExpression(T::model_name(), "updating".to_owned()));
+        }
         let collection: Collection<T> = self.pool.collection(T::collection_name());
+
+        // If the user passed a doc without an operation, wrap its contents within a $set
+        if let Some(doc_key) = update_doc.keys().next()
+            && let Some(first_char) = doc_key.chars().next()
+            && first_char != '$'
+        {
+            update_doc = doc! { "$set": update_doc }
+        }
+
+        // Add updated_at if the caller didn't do it themselves
+        Self::add_updated_at(&mut update_doc);
+
         match collection.update_one(filter_doc, update_doc).await {
             Ok(update_res) => {
                 if update_res.matched_count == 0 {
@@ -130,11 +146,25 @@ impl PatDatabase {
         }
     }
 
-    pub async fn find_and_update_one<T>(&self, filter_doc: Document, update_doc: Document) -> Result<T, DbError>
+    pub async fn find_and_update_one<T>(&self, filter_doc: Document, mut update_doc: Document) -> Result<T, DbError>
     where
         T: MongoModel + Send + Sync + DeserializeOwned,
     {
+        if update_doc.is_empty() {
+            return Err(DbError::EmptyDbExpression(T::model_name(), "updating".to_owned()));
+        }
         let collection: Collection<T> = self.pool.collection(T::collection_name());
+
+        // If the user passed a doc without an operation, wrap its contents within a $set
+        if let Some(doc_key) = update_doc.keys().next()
+            && let Some(first_char) = doc_key.chars().next()
+            && first_char != '$'
+        {
+            update_doc = doc! { "$set": update_doc }
+        }
+
+        // Add updated_at if the caller didn't do it themselves
+        Self::add_updated_at(&mut update_doc);
 
         // find_one_and_update acts like an atomic operation and by default "swaps" the new and old
         // documents, meaning that the default behavior is to return the document _before_ it's
@@ -169,6 +199,26 @@ impl PatDatabase {
                 Ok(())
             }
             Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Check if the update document contains "updated_at", add it if it is not already present.
+    fn add_updated_at(doc: &mut Document) {
+        let current_time = current_unix_time();
+        if Self::get_doc_key_value(doc, "updated_at").is_none()
+            && let Ok(set_changes) = doc.get_document_mut("$set")
+        {
+            set_changes.insert("updated_at", current_time);
+        }
+    }
+
+    fn get_doc_key_value<'a>(document: &'a Document, key: &str) -> Option<&'a Bson> {
+        match document.get("$set") {
+            Some(val) => match val {
+                Bson::Document(set_doc) => set_doc.get(key),
+                _ => None,
+            },
+            None => document.get(key),
         }
     }
 }
