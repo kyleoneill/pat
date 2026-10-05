@@ -1,13 +1,13 @@
 use super::message::ChatMessage;
-use super::validation::CreateMessageSchema;
+use super::validation::{CreateMessageSchema, EditMessageSchema};
 use crate::{
     db::{MongoModel, PatDatabase, str_to_object_id},
     error_handler::DbError,
     models::chat::chat_channel::ChatChannel,
 };
-use futures::TryStreamExt;
+use futures::StreamExt;
 use mongodb::{
-    Collection,
+    Collection, bson,
     bson::{Bson, Document, doc},
     error::Error as MongoError,
 };
@@ -66,27 +66,65 @@ pub async fn insert_chat_message(db_handle: &PatDatabase, data: CreateMessageSch
     db_handle.find_one(filter_doc).await
 }
 
+pub async fn get_chat_message(db_handle: &PatDatabase, message_id: &str) -> Result<ChatMessage, DbError> {
+    let as_object_id = str_to_object_id(message_id)?;
+    let filter_doc = doc! {"_id": Bson::ObjectId(as_object_id)};
+    db_handle.find_one(filter_doc).await
+}
+
+pub async fn update_chat_message(db_handle: &PatDatabase, message_id: &str, edit_msg_data: &EditMessageSchema) -> Result<ChatMessage, DbError> {
+    let as_object_id = str_to_object_id(message_id)?;
+    let filter_doc = doc! {"_id": Bson::ObjectId(as_object_id)};
+    let mut update_doc = match bson::to_document(edit_msg_data) {
+        Ok(res) => res,
+        Err(_) => return Err(DbError::UnhandledException("Failed to serialize update request data".to_string())),
+    };
+    // Remove the message_id from the edit packet. We cannot use serde(skip_serializing) for the field
+    // since it is serialized in tests
+    update_doc.remove("message_id");
+    db_handle.find_and_update_one(filter_doc, update_doc).await
+}
+
+/// Get message_count messages starting from the passed in atomic_id going backwards. If no message
+/// equal to the atomic_id exists, get message_count starting from the first existing message older
+/// than it.
+///
+/// e.g. if atomic_id 1000000 is passed with message_count=2 in but the most recent is 10, this will return
+/// [9, 10]
 pub async fn get_chat_message_span(
     db_handle: &PatDatabase,
     atomic_id: i64,
     channel_id: &str,
-    message_count: i64,
+    message_count: usize,
 ) -> Result<Vec<ChatMessage>, DbError> {
     let collection: Collection<ChatMessage> = db_handle.get_collection();
-    let lower_range = (atomic_id - message_count).max(0);
+
+    // Get messages from this channel starting from the given atomic id going backwards
     let doc = doc! {
         "channel_id": channel_id,
-        "$and": [
-            {"atomic_id": {"$lte": atomic_id} },
-            {"atomic_id": {"$gt": lower_range} }
-        ]
+        "atomic_id": {"$lte": atomic_id},
     };
-    let sort = doc! {"atomic_id": 1};
+    let sort = doc! {"atomic_id": -1};
+
+    // Add messages to the vec until we either have the message_count number of them or we exhaust
+    // the cursor
     match collection.find(doc).sort(sort).await {
-        Ok(cursor) => match cursor.try_collect().await {
-            Ok(res) => Ok(res),
-            Err(e) => Err(e.into()),
-        },
+        Ok(mut cursor) => {
+            let mut messages = Vec::new();
+
+            while let Some(pulled_message) = cursor.next().await {
+                if messages.len() == message_count {
+                    break;
+                }
+                match pulled_message {
+                    Ok(msg) => messages.push(msg),
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            // Reverse the vec before returning so it ends with the newest message
+            messages.reverse();
+            Ok(messages)
+        }
         Err(e) => Err(e.into()),
     }
 }

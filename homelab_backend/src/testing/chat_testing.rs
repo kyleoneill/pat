@@ -9,7 +9,7 @@ mod chat_testing {
     use crate::models::chat::{
         chat_channel::{ChannelType, ReturnChannel},
         packet::{RequestMessagesSchema, WebSocketRequest},
-        validation::{CreateChannelSchema, CreateMessageSchema},
+        validation::{CreateChannelSchema, CreateMessageSchema, EditMessageSchema},
     };
     use crate::models::user::ReturnUser;
     use crate::testing::helpers::chat_helpers::{
@@ -284,6 +284,7 @@ mod chat_testing {
         assert_eq!(chat_message.reactions.len(), 0);
         assert_eq!(chat_message.pinned, false);
         assert_eq!(chat_message.atomic_id, 1);
+        assert_eq!(chat_message.created_at, chat_message.updated_at);
 
         let chat_message_user_two = receive_chat_message(&mut second_socket)
             .await
@@ -375,6 +376,42 @@ mod chat_testing {
             Ok(_) => panic!("Should receive a WebSocketError after sending arbitrary text that cannot be deserialized"),
             Err(e) => assert_eq!(e.status_code, 400),
         }
+
+        // ----------------------------------
+        // Message Editing
+        // Try to edit a message that does not exist
+        let edit_nonexistent_message_schema: WebSocketRequest = EditMessageSchema {
+            message_id: FAKE_MONGO_ID.to_string(),
+            contents: Some("foo".to_string()),
+        }
+        .into();
+        send_websocket_request(&mut first_socket, &edit_nonexistent_message_schema).await;
+        match receive_chat_message(&mut first_socket).await {
+            Ok(_) => panic!("Should receive a WebsocketError after trying to edit a message which does not exist"),
+            Err(e) => assert_eq!(e.status_code, 404),
+        }
+
+        // Try to edit somebody else's message
+        let edit_other_message_schema: WebSocketRequest = EditMessageSchema {
+            message_id: user_two_only_msg.id.clone(),
+            contents: Some("foo".to_string()),
+        }
+        .into();
+        send_websocket_request(&mut first_socket, &edit_other_message_schema).await;
+        match receive_chat_message(&mut first_socket).await {
+            Ok(_) => panic!("Should receive a WebsocketError after trying to edit a message which belongs to somebody else"),
+            Err(e) => assert_eq!(e.status_code, 403),
+        }
+
+        // Edit a message
+        let edit_message_schema: WebSocketRequest = EditMessageSchema {
+            message_id: chat_message.id.clone(),
+            contents: Some("edited message contents".to_string()),
+        }
+        .into();
+        send_websocket_request(&mut first_socket, &edit_message_schema).await;
+        let edited_message = receive_chat_message(&mut first_socket).await.expect("Failed to edit a chat message");
+        assert_eq!(edited_message.contents.as_str(), "edited message contents");
     }
 
     #[tokio::test]
@@ -489,7 +526,7 @@ mod chat_testing {
         assert_eq!(messages_we_can_get[0].atomic_id, 1);
         assert_eq!(messages_we_can_get[1].atomic_id, 2);
 
-        // Request 10 chat messages starting at an id that does not exist
+        // Request 10 chat messages starting at an id that does not exist, we should get the 10 most recent messages
         let request_some_messages: WebSocketRequest = RequestMessagesSchema {
             message_count: 10,
             atomic_message_id: 1000,
@@ -497,8 +534,8 @@ mod chat_testing {
         }
         .into();
         send_websocket_request(&mut first_socket, &request_some_messages).await;
-        let no_messages = receive_chat_state(&mut first_socket).await.expect("Failed to get some chat messages");
-        assert_eq!(no_messages.len(), 0);
+        let most_recent_messages = receive_chat_state(&mut first_socket).await.expect("Failed to get some chat messages");
+        assert_eq!(most_recent_messages.len(), 10);
     }
 
     #[tokio::test]
