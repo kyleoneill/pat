@@ -25,6 +25,9 @@ impl MongoModel for ChatMessage {
 }
 
 pub async fn insert_chat_message(db_handle: &PatDatabase, data: CreateMessageSchema, user_id: String) -> Result<ChatMessage, DbError> {
+    // This takes a String for user_id rather than a &String or &str because of lifetime issues in
+    // impl Send in websocket response stuff
+
     let chat_message_collection: Collection<Document> = db_handle.get_type_agnostic_collection(ChatMessage::collection_name());
     let channel_collection: Collection<ChatChannel> = db_handle.get_collection();
 
@@ -72,10 +75,10 @@ pub async fn get_chat_message(db_handle: &PatDatabase, message_id: &str) -> Resu
     db_handle.find_one(filter_doc).await
 }
 
-pub async fn update_chat_message(db_handle: &PatDatabase, message_id: &str, edit_msg_data: &EditMessageSchema) -> Result<ChatMessage, DbError> {
-    let as_object_id = str_to_object_id(message_id)?;
+pub async fn update_chat_message(db_handle: &PatDatabase, edit_msg_data: EditMessageSchema) -> Result<ChatMessage, DbError> {
+    let as_object_id = str_to_object_id(edit_msg_data.message_id.as_str())?;
     let filter_doc = doc! {"_id": Bson::ObjectId(as_object_id)};
-    let mut update_doc = match bson::to_document(edit_msg_data) {
+    let mut update_doc = match bson::to_document(&edit_msg_data) {
         Ok(res) => res,
         Err(_) => return Err(DbError::UnhandledException("Failed to serialize update request data".to_string())),
     };
